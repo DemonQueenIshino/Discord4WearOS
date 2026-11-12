@@ -240,7 +240,7 @@ fun ServerScreen(
                                 contentAlignment = Alignment.Center
                             ) {
                                 Row(
-                                    horizontalArrangement = Arrangement.spacedBy(10.dp, Alignment.CenterHorizontally),
+                                    horizontalArrangement = Arrangement.spacedBy(66.dp, Alignment.CenterHorizontally),
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
                                     RenderHexItem(
