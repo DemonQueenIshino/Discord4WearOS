@@ -577,7 +577,7 @@ fun ChatScreen(
                     Text(
                         "#$channelName",
                         style = MaterialTheme.typography.titleMedium,
-                        textAlign = TextAlign.Center
+                        textAlign = androidx.compose.ui.text.style.TextAlign.Center
                     )
                 }
 
