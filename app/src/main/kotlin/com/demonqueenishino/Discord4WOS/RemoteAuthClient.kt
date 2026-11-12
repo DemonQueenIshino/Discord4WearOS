@@ -1,4 +1,4 @@
-package com.zaffox.discordwear
+package com.demonqueenishino.Discord4WOS
 
 import android.util.Base64
 import android.util.Log

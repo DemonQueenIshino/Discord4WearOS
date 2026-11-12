@@ -1,7 +1,7 @@
-package com.zaffox.discordwear
+package com.demonqueenishino.Discord4WOS
 
 import android.app.Application
-import com.zaffox.discordwear.api.DiscordRepository
+import com.demonqueenishino.Discord4WOS.api.DiscordRepository
 
 class DiscordWearApp : Application() {
     var repository: DiscordRepository? = null

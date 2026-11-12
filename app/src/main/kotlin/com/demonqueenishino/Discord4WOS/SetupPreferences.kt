@@ -1,4 +1,4 @@
-package com.zaffox.discordwear
+package com.demonqueenishino.Discord4WOS
 
 import android.content.ContentUris
 import android.content.ContentValues

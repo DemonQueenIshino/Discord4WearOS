@@ -1,4 +1,4 @@
-package com.zaffox.discordwear.api
+package com.demonqueenishino.Discord4WOS.api
 
 import android.content.Context
 import android.content.SharedPreferences
@@ -12,7 +12,7 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
-import com.zaffox.discordwear.SetupPreferences
+import com.demonqueenishino.Discord4WOS.SetupPreferences
 import org.json.JSONArray
 import org.json.JSONObject
 
@@ -42,6 +42,9 @@ class DiscordRepository(token: String, private val context: Context? = null) {
 
     private val _guilds = MutableStateFlow<List<Guild>>(loadCachedGuilds())
     val guilds: StateFlow<List<Guild>> = _guilds.asStateFlow()
+
+    private val _guildFolders = MutableStateFlow<List<RawGuildFolder>>(loadCachedGuildFolders())
+    val guildFolders: StateFlow<List<RawGuildFolder>> = _guildFolders.asStateFlow()
 
     private val _dmChannels = MutableStateFlow<List<Channel>>(loadCachedDmChannels())
     val dmChannels: StateFlow<List<Channel>> = _dmChannels.asStateFlow()
@@ -210,9 +213,19 @@ class DiscordRepository(token: String, private val context: Context? = null) {
     }
 
     suspend fun refreshGuilds() {
+        scope.launch { refreshGuildFolders() }
         rest.getGuilds().onSuccess { list ->
             _guilds.value = list
             saveGuilds(list)
+        }.onFailure { handleApiError(it) }
+    }
+
+    suspend fun refreshGuildFolders() {
+        rest.getUserGuildFolders().onSuccess { folders ->
+            if (folders.isNotEmpty()) {
+                _guildFolders.value = folders
+                saveGuildFolders(folders)
+            }
         }.onFailure { handleApiError(it) }
     }
 
@@ -622,11 +635,20 @@ class DiscordRepository(token: String, private val context: Context? = null) {
                                     ensureChannelCached(chId)
                                 }
                         }
+                        if (event.guildFolders.isNotEmpty()) {
+                            _guildFolders.value = event.guildFolders
+                            saveGuildFolders(event.guildFolders)
+                        }
                         if (event.presences.isNotEmpty()) {
                             _presences.value = event.presences
                                 .filter { it.userId.isNotEmpty() }
                                 .associateBy { it.userId }
                         }
+                    }
+
+                    is GatewayEvent.GuildFoldersUpdate -> {
+                        _guildFolders.value = event.guildFolders
+                        saveGuildFolders(event.guildFolders)
                     }
 
                     is GatewayEvent.MessageCreate -> {
@@ -819,5 +841,25 @@ class DiscordRepository(token: String, private val context: Context? = null) {
     private fun saveDmChannels(list: List<Channel>) = runCatching {
         prefs?.edit()?.putString("dm_channels", JSONArray(list.map { it.toJson() }).toString())
             ?.apply()
+    }
+
+    private fun loadCachedGuildFolders(): List<RawGuildFolder> = runCatching {
+        val json = prefs?.getString("guild_folders", null) ?: return emptyList()
+        RawGuildFolder.listFromJson(JSONArray(json))
+    }.getOrElse { emptyList() }
+
+    private fun saveGuildFolders(list: List<RawGuildFolder>) = runCatching {
+        val arr = JSONArray()
+        list.forEach { f ->
+            val obj = JSONObject()
+            obj.put("id", f.id ?: JSONObject.NULL)
+            obj.put("name", f.name ?: JSONObject.NULL)
+            obj.put("color", f.color ?: JSONObject.NULL)
+            val gArr = JSONArray()
+            f.guildIds.forEach { gArr.put(it) }
+            obj.put("guild_ids", gArr)
+            arr.put(obj)
+        }
+        prefs?.edit()?.putString("guild_folders", arr.toString())?.apply()
     }
 }

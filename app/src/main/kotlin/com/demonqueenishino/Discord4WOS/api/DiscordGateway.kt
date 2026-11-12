@@ -1,4 +1,4 @@
-package com.zaffox.discordwear.api
+package com.demonqueenishino.Discord4WOS.api
 
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -239,7 +239,18 @@ class DiscordGateway(private val token: String) {
                         runCatching { presences.add(UserPresence.fromJson(presArr.getJSONObject(i))) }
                     }
                 }
-                if (user != null) GatewayEvent.Ready(user, readState, presences) else null
+                val userSettings = d.optJSONObject("user_settings")
+                val foldersArr = userSettings?.optJSONArray("guild_folders")
+                val guildFolders = RawGuildFolder.listFromJson(foldersArr)
+                if (user != null) GatewayEvent.Ready(user, readState, presences, guildFolders) else null
+            }
+
+            "USER_SETTINGS_UPDATE" -> {
+                val foldersArr = d.optJSONArray("guild_folders")
+                if (foldersArr != null) {
+                    val guildFolders = RawGuildFolder.listFromJson(foldersArr)
+                    GatewayEvent.GuildFoldersUpdate(guildFolders)
+                } else null
             }
 
             "MESSAGE_CREATE" -> runCatching {
@@ -346,7 +357,12 @@ sealed class GatewayEvent {
     data class Ready(
         val user: DiscordUser,
         val readState: Map<String, ChannelUnreadState> = emptyMap(),
-        val presences: List<UserPresence> = emptyList()
+        val presences: List<UserPresence> = emptyList(),
+        val guildFolders: List<RawGuildFolder> = emptyList()
+    ) : GatewayEvent()
+
+    data class GuildFoldersUpdate(
+        val guildFolders: List<RawGuildFolder>
     ) : GatewayEvent()
 
     data class MessageCreate(

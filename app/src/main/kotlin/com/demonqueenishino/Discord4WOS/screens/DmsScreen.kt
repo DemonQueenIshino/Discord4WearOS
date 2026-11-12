@@ -1,4 +1,4 @@
-package com.zaffox.discordwear.screens
+package com.demonqueenishino.Discord4WOS.screens
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -23,9 +23,9 @@ import androidx.wear.compose.material3.*
 import coil.ImageLoader
 import coil.compose.SubcomposeAsyncImage
 import coil.request.ImageRequest
-import com.zaffox.discordwear.SetupPreferences
-import com.zaffox.discordwear.api.*
-import com.zaffox.discordwear.discordApp
+import com.demonqueenishino.Discord4WOS.SetupPreferences
+import com.demonqueenishino.Discord4WOS.api.*
+import com.demonqueenishino.Discord4WOS.discordApp
 import kotlinx.coroutines.launch
 
 @Composable

@@ -1,4 +1,4 @@
-package com.zaffox.discordwear.screens
+package com.demonqueenishino.Discord4WOS.screens
 
 import androidx.wear.compose.foundation.lazy.ScalingLazyColumn
 import androidx.wear.compose.foundation.lazy.rememberScalingLazyListState

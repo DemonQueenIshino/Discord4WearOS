@@ -1,4 +1,4 @@
-package com.zaffox.discordwear.api
+package com.demonqueenishino.Discord4WOS.api
 
 import org.json.JSONArray
 import org.json.JSONObject
@@ -1049,3 +1049,42 @@ data class Ping(
     val channelName: String,
     val guildName: String?
 )
+
+data class RawGuildFolder(
+    val id: String?,
+    val name: String?,
+    val color: Int?,
+    val guildIds: List<String>
+) {
+    val isFolder: Boolean
+        get() = id != null || guildIds.size > 1 || !name.isNullOrBlank()
+
+    companion object {
+        fun fromJson(obj: JSONObject): RawGuildFolder {
+            val id = if (obj.isNull("id")) null else obj.optString("id").takeIf { it.isNotEmpty() && it != "null" }
+            val name = if (obj.isNull("name")) null else obj.optString("name").takeIf { it.isNotEmpty() && it != "null" }
+            val color = if (obj.isNull("color")) null else obj.optInt("color").takeIf { it != 0 }
+            val guildIds = mutableListOf<String>()
+            val arr = obj.optJSONArray("guild_ids")
+            if (arr != null) {
+                for (i in 0 until arr.length()) {
+                    val gId = arr.optString(i).takeIf { it.isNotEmpty() && it != "null" }
+                    if (gId != null) {
+                        guildIds.add(gId)
+                    }
+                }
+            }
+            return RawGuildFolder(id, name, color, guildIds)
+        }
+
+        fun listFromJson(arr: JSONArray?): List<RawGuildFolder> {
+            if (arr == null) return emptyList()
+            val list = mutableListOf<RawGuildFolder>()
+            for (i in 0 until arr.length()) {
+                val obj = arr.optJSONObject(i) ?: continue
+                list.add(fromJson(obj))
+            }
+            return list
+        }
+    }
+}

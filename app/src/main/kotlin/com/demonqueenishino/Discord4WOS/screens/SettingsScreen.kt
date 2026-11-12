@@ -1,4 +1,4 @@
-package com.zaffox.discordwear.screens
+package com.demonqueenishino.Discord4WOS.screens
 
 import androidx.compose.foundation.layout.*
 import androidx.compose.runtime.*
@@ -9,8 +9,8 @@ import androidx.compose.ui.unit.dp
 import androidx.wear.compose.foundation.lazy.ScalingLazyColumn
 import androidx.wear.compose.foundation.lazy.rememberScalingLazyListState
 import androidx.wear.compose.material3.*
-import com.zaffox.discordwear.SetupPreferences
-import com.zaffox.discordwear.discordApp
+import com.demonqueenishino.Discord4WOS.SetupPreferences
+import com.demonqueenishino.Discord4WOS.discordApp
 import kotlinx.coroutines.launch
 
 @Composable

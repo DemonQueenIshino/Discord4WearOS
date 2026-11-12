@@ -1,4 +1,4 @@
-package com.zaffox.discordwear.screens
+package com.demonqueenishino.Discord4WOS.screens
 
 import android.graphics.Bitmap
 import androidx.compose.foundation.Image
@@ -22,11 +22,11 @@ import coil.compose.AsyncImage
 import com.google.zxing.BarcodeFormat
 import com.google.zxing.EncodeHintType
 import com.google.zxing.qrcode.QRCodeWriter
-import com.zaffox.discordwear.RemoteAuthClient
-import com.zaffox.discordwear.RemoteAuthState
-import com.zaffox.discordwear.SetupPreferences
-import com.zaffox.discordwear.api.DiscordRestClient
-import com.zaffox.discordwear.discordApp
+import com.demonqueenishino.Discord4WOS.RemoteAuthClient
+import com.demonqueenishino.Discord4WOS.RemoteAuthState
+import com.demonqueenishino.Discord4WOS.SetupPreferences
+import com.demonqueenishino.Discord4WOS.api.DiscordRestClient
+import com.demonqueenishino.Discord4WOS.discordApp
 import kotlinx.coroutines.launch
 
 @Composable

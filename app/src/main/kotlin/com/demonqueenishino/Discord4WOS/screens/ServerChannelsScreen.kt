@@ -1,4 +1,4 @@
-package com.zaffox.discordwear.screens
+package com.demonqueenishino.Discord4WOS.screens
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
@@ -17,11 +17,11 @@ import androidx.wear.compose.foundation.lazy.rememberScalingLazyListState
 import androidx.wear.compose.material3.*
 import androidx.compose.material3.Icon
 import androidx.compose.ui.res.painterResource
-import com.zaffox.discordwear.R
-import com.zaffox.discordwear.SetupPreferences
-import com.zaffox.discordwear.api.Channel
-import com.zaffox.discordwear.api.ChannelType
-import com.zaffox.discordwear.discordApp
+import com.demonqueenishino.Discord4WOS.R
+import com.demonqueenishino.Discord4WOS.SetupPreferences
+import com.demonqueenishino.Discord4WOS.api.Channel
+import com.demonqueenishino.Discord4WOS.api.ChannelType
+import com.demonqueenishino.Discord4WOS.discordApp
 import kotlinx.coroutines.launch
 
 @Composable

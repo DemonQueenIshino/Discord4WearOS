@@ -1,4 +1,4 @@
-package com.zaffox.discordwear.screens
+package com.demonqueenishino.Discord4WOS.screens
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
@@ -22,11 +22,11 @@ import androidx.wear.compose.foundation.lazy.rememberScalingLazyListState
 import androidx.wear.compose.material3.*
 import coil.ImageLoader
 import coil.decode.ImageDecoderDecoder
-import com.zaffox.discordwear.R
-import com.zaffox.discordwear.api.DiscordMessage
-import com.zaffox.discordwear.api.DiscordUser
-import com.zaffox.discordwear.api.GuildRole
-import com.zaffox.discordwear.discordApp
+import com.demonqueenishino.Discord4WOS.R
+import com.demonqueenishino.Discord4WOS.api.DiscordMessage
+import com.demonqueenishino.Discord4WOS.api.DiscordUser
+import com.demonqueenishino.Discord4WOS.api.GuildRole
+import com.demonqueenishino.Discord4WOS.discordApp
 import kotlinx.coroutines.launch
 import android.Manifest
 import android.content.pm.PackageManager
@@ -35,7 +35,7 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
-import com.zaffox.discordwear.api.ReactionEmoji
+import com.demonqueenishino.Discord4WOS.api.ReactionEmoji
 import java.io.File
 import kotlinx.coroutines.delay
 

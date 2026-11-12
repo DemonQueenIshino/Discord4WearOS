@@ -1,4 +1,4 @@
-package com.zaffox.discordwear.screens
+package com.demonqueenishino.Discord4WOS.screens
 
 import android.content.Intent
 import androidx.core.net.toUri
@@ -65,10 +65,10 @@ import android.media.MediaRecorder
 import android.Manifest
 import android.content.pm.PackageManager
 import androidx.core.content.ContextCompat
-import com.zaffox.discordwear.api.*
-import com.zaffox.discordwear.discordApp
-import com.zaffox.discordwear.SetupPreferences
-import com.zaffox.discordwear.R
+import com.demonqueenishino.Discord4WOS.api.*
+import com.demonqueenishino.Discord4WOS.discordApp
+import com.demonqueenishino.Discord4WOS.SetupPreferences
+import com.demonqueenishino.Discord4WOS.R
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.delay
 import androidx.compose.runtime.snapshots.SnapshotStateMap
@@ -2284,7 +2284,7 @@ private fun AudioAttachment(att: Attachment) {
 
 @Composable
 private fun DiscordAvatarWithDecoration(
-    user: com.zaffox.discordwear.api.DiscordUser,
+    user: com.demonqueenishino.Discord4WOS.api.DiscordUser,
     imageLoader: ImageLoader,
     size: Dp,
     guildId: String? = null,

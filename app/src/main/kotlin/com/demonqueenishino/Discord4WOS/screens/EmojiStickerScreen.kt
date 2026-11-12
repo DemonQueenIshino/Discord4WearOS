@@ -1,4 +1,4 @@
-package com.zaffox.discordwear.screens
+package com.demonqueenishino.Discord4WOS.screens
 
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -17,10 +17,10 @@ import coil.ImageLoader
 import coil.compose.AsyncImage
 import coil.decode.ImageDecoderDecoder
 import coil.request.ImageRequest
-import com.zaffox.discordwear.api.GuildEmoji
-import com.zaffox.discordwear.api.StickerItem
-import com.zaffox.discordwear.discordApp
-import com.zaffox.discordwear.R
+import com.demonqueenishino.Discord4WOS.api.GuildEmoji
+import com.demonqueenishino.Discord4WOS.api.StickerItem
+import com.demonqueenishino.Discord4WOS.discordApp
+import com.demonqueenishino.Discord4WOS.R
 import androidx.compose.ui.res.painterResource
 import kotlinx.coroutines.launch
 

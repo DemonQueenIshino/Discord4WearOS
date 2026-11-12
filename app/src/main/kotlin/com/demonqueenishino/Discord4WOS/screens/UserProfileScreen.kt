@@ -1,4 +1,4 @@
-package com.zaffox.discordwear.screens
+package com.demonqueenishino.Discord4WOS.screens
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
@@ -27,8 +27,8 @@ import coil.compose.AsyncImage
 import coil.compose.SubcomposeAsyncImage
 import coil.decode.SvgDecoder
 import coil.request.ImageRequest
-import com.zaffox.discordwear.api.*
-import com.zaffox.discordwear.discordApp
+import com.demonqueenishino.Discord4WOS.api.*
+import com.demonqueenishino.Discord4WOS.discordApp
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable

@@ -1,4 +1,4 @@
-package com.zaffox.discordwear.api
+package com.demonqueenishino.Discord4WOS.api
 
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -58,6 +58,12 @@ class DiscordRestClient(private val token: String) {
 
     suspend fun getGuilds(): Result<List<Guild>> = runCatching {
         Guild.listFromJson(JSONArray(get("/users/@me/guilds?limit=200")))
+    }
+
+    suspend fun getUserGuildFolders(): Result<List<RawGuildFolder>> = runCatching {
+        val json = JSONObject(get("/users/@me/settings"))
+        val arr = json.optJSONArray("guild_folders")
+        RawGuildFolder.listFromJson(arr)
     }
 
     suspend fun getGuildMember(guildId: String): Result<GuildMember> = runCatching {

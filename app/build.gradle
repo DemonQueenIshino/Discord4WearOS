@@ -5,7 +5,7 @@ plugins {
 }
 
 android {
-    namespace "com.zaffox.discordwear"
+    namespace "com.demonqueenishino.Discord4WOS"
     compileSdk 35
 
     lint { //stupid lint keeps crashing 3:<

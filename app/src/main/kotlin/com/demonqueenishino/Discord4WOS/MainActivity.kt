@@ -1,4 +1,4 @@
-package com.zaffox.discordwear
+package com.demonqueenishino.Discord4WOS
 
 import android.Manifest
 import android.content.Intent
@@ -18,7 +18,7 @@ import androidx.wear.compose.material3.TimeText
 import androidx.wear.compose.navigation.SwipeDismissableNavHost
 import androidx.wear.compose.navigation.composable
 import androidx.wear.compose.navigation.rememberSwipeDismissableNavController
-import com.zaffox.discordwear.screens.*
+import com.demonqueenishino.Discord4WOS.screens.*
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
