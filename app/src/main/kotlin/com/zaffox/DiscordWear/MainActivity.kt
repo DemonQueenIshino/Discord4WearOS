@@ -79,13 +79,11 @@ class MainActivity : ComponentActivity() {
                         }
 
                         composable("Welcome") {
-                            WelcomeScreen(onSetupComplete = {
-                                navController.navigate("home") {
-                                    popUpTo("Welcome") { inclusive = true }
+                            WelcomeScreen(
+                                onNavigateToQrLogin = {
+                                    navController.navigate("qrlogin")
                                 }
-                            }, onNavigateToQrLogin = {
-                                navController.navigate("qrlogin")
-                            })
+                            )
                         }
 
                         composable("qrlogin") {

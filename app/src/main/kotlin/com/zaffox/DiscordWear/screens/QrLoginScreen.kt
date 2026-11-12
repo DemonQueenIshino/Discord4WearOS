@@ -89,7 +89,7 @@ fun QrLoginScreen(onSetupComplete: () -> Unit, onBack: () -> Unit) {
                     }
                     item {
                         Text(
-                            "Discord is requiring a captcha. Try again with a different login method, Or check if a VPN/Poxy is enabled, and that you are on a Home IP. ",
+                            "Discord is requiring a captcha. Check if a VPN/Proxy is enabled and try again on a regular connection.",
                             style = MaterialTheme.typography.labelSmall,
                             textAlign = TextAlign.Center,
                             modifier = Modifier
