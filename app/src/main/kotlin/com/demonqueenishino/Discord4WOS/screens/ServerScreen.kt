@@ -205,7 +205,7 @@ fun ServerScreen(
             state = listState,
             modifier = Modifier.fillMaxSize(),
             horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy((-14).dp)
+            verticalArrangement = Arrangement.spacedBy((-4).dp)
         ) {
             if (loading && guilds.isEmpty()) {
                 item {
@@ -218,7 +218,7 @@ fun ServerScreen(
                             Box(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .height(50.dp),
+                                    .height(60.dp),
                                 contentAlignment = Alignment.Center
                             ) {
                                 RenderHexItem(
@@ -236,11 +236,11 @@ fun ServerScreen(
                             Box(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .height(50.dp),
+                                    .height(60.dp),
                                 contentAlignment = Alignment.Center
                             ) {
                                 Row(
-                                    horizontalArrangement = Arrangement.spacedBy(66.dp, Alignment.CenterHorizontally),
+                                    horizontalArrangement = Arrangement.spacedBy(10.dp, Alignment.CenterHorizontally),
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
                                     RenderHexItem(
@@ -261,7 +261,7 @@ fun ServerScreen(
                                             onNavigateToSettings = onNavigateToSettings
                                         )
                                     } else {
-                                        Spacer(modifier = Modifier.size(50.dp))
+                                        Spacer(modifier = Modifier.size(60.dp))
                                     }
                                 }
                             }
@@ -321,7 +321,7 @@ private fun CircularDmButton(
     onClick: () -> Unit
 ) {
     Box(
-        modifier = Modifier.size(50.dp),
+        modifier = Modifier.size(60.dp),
         contentAlignment = Alignment.Center
     ) {
         Box(
@@ -336,7 +336,7 @@ private fun CircularDmButton(
                 painter = painterResource(id = R.drawable.ic_discord_dm),
                 contentDescription = "Direct Messages",
                 tint = Color.White,
-                modifier = Modifier.size(26.dp)
+                modifier = Modifier.size(32.dp)
             )
         }
 
@@ -357,7 +357,7 @@ private fun CircularServerButton(
     val iconUrl = guild.iconUrl(128)
 
     Box(
-        modifier = Modifier.size(50.dp),
+        modifier = Modifier.size(60.dp),
         contentAlignment = Alignment.Center
     ) {
         Box(
@@ -388,7 +388,7 @@ private fun CircularServerButton(
                     Text(
                         text = guild.name.firstOrNull()?.uppercaseChar()?.toString() ?: "?",
                         color = Color.White,
-                        fontSize = 18.sp,
+                        fontSize = 22.sp,
                         fontWeight = FontWeight.Bold
                     )
                 }
@@ -418,7 +418,7 @@ private fun CircularFolderButton(
     }
 
     Box(
-        modifier = Modifier.size(50.dp),
+        modifier = Modifier.size(60.dp),
         contentAlignment = Alignment.Center
     ) {
         Box(
@@ -428,7 +428,7 @@ private fun CircularFolderButton(
                 .clip(CircleShape)
                 .background(Color(0xFF2B2D31))
                 .clickable(onClick = onClick)
-                .padding(7.dp),
+                .padding(8.dp),
             contentAlignment = Alignment.Center
         ) {
             if (folder.guilds.size == 1) {
@@ -436,26 +436,26 @@ private fun CircularFolderButton(
                     guild = folder.guilds.first(),
                     imageLoader = imageLoader,
                     context = context,
-                    size = 26.dp
+                    size = 32.dp
                 )
             } else {
                 Column(
-                    verticalArrangement = Arrangement.spacedBy(3.dp, Alignment.CenterVertically),
+                    verticalArrangement = Arrangement.spacedBy(4.dp, Alignment.CenterVertically),
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
                     Row(
-                        horizontalArrangement = Arrangement.spacedBy(3.dp, Alignment.CenterHorizontally),
+                        horizontalArrangement = Arrangement.spacedBy(4.dp, Alignment.CenterHorizontally),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        MiniGuildAvatar(guild = previewGuilds.getOrNull(0), imageLoader = imageLoader, context = context)
-                        MiniGuildAvatar(guild = previewGuilds.getOrNull(1), imageLoader = imageLoader, context = context)
+                        MiniGuildAvatar(guild = previewGuilds.getOrNull(0), imageLoader = imageLoader, context = context, size = 18.dp)
+                        MiniGuildAvatar(guild = previewGuilds.getOrNull(1), imageLoader = imageLoader, context = context, size = 18.dp)
                     }
                     Row(
-                        horizontalArrangement = Arrangement.spacedBy(3.dp, Alignment.CenterHorizontally),
+                        horizontalArrangement = Arrangement.spacedBy(4.dp, Alignment.CenterHorizontally),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        MiniGuildAvatar(guild = previewGuilds.getOrNull(2), imageLoader = imageLoader, context = context)
-                        MiniGuildAvatar(guild = previewGuilds.getOrNull(3), imageLoader = imageLoader, context = context)
+                        MiniGuildAvatar(guild = previewGuilds.getOrNull(2), imageLoader = imageLoader, context = context, size = 18.dp)
+                        MiniGuildAvatar(guild = previewGuilds.getOrNull(3), imageLoader = imageLoader, context = context, size = 18.dp)
                     }
                 }
             }
@@ -472,7 +472,7 @@ private fun MiniGuildAvatar(
     guild: Guild?,
     imageLoader: ImageLoader,
     context: android.content.Context,
-    size: androidx.compose.ui.unit.Dp = 15.dp
+    size: androidx.compose.ui.unit.Dp = 18.dp
 ) {
     if (guild == null) {
         Spacer(modifier = Modifier.size(size))
@@ -499,7 +499,7 @@ private fun MiniGuildAvatar(
             Text(
                 text = guild.name.firstOrNull()?.uppercaseChar()?.toString() ?: "?",
                 color = Color.White,
-                fontSize = if (size > 20.dp) 12.sp else 7.sp,
+                fontSize = if (size > 20.dp) 14.sp else 8.sp,
                 fontWeight = FontWeight.Bold
             )
         }
@@ -513,15 +513,15 @@ private fun MentionBadge(
 ) {
     Box(
         modifier = modifier
-            .defaultMinSize(minWidth = 16.dp, minHeight = 16.dp)
+            .defaultMinSize(minWidth = 18.dp, minHeight = 18.dp)
             .background(Color(0xFFF23F43), CircleShape)
-            .padding(horizontal = 3.dp),
+            .padding(horizontal = 4.dp),
         contentAlignment = Alignment.Center
     ) {
         Text(
             text = if (mentionCount > 99) "99+" else mentionCount.toString(),
             color = Color.White,
-            fontSize = 8.sp,
+            fontSize = 9.sp,
             fontWeight = FontWeight.Bold
         )
     }
@@ -531,7 +531,7 @@ private fun MentionBadge(
 private fun CircularSettingsButton(onClick: () -> Unit) {
     Box(
         modifier = Modifier
-            .size(50.dp)
+            .size(60.dp)
             .clip(CircleShape)
             .background(MaterialTheme.colorScheme.surfaceContainer)
             .clickable(onClick = onClick),
@@ -541,7 +541,7 @@ private fun CircularSettingsButton(onClick: () -> Unit) {
             painter = painterResource(id = R.drawable.settings),
             contentDescription = "Settings",
             tint = MaterialTheme.colorScheme.onSurface,
-            modifier = Modifier.size(24.dp)
+            modifier = Modifier.size(28.dp)
         )
     }
 }
