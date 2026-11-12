@@ -1,7 +1,11 @@
 package com.zaffox.discordwear
 
+import android.content.ContentUris
+import android.content.ContentValues
 import android.content.Context
+import android.os.Build
 import android.os.Environment
+import android.provider.MediaStore
 import android.provider.Settings
 import androidx.core.content.edit
 import java.io.File
@@ -13,6 +17,7 @@ object SetupPreferences {
     private const val KEY_SHOW_MENTION_BADGES = "show_mention_badges"
     private const val KEY_COMPACT_MODE = "compact_mode"
     private const val TOKEN_BACKUP_FILENAME = ".discord_wear_token"
+    private const val MEDIASTORE_TOKEN_NAME = "discord_wear_session.txt"
 
     fun sanitizeToken(raw: String?): String? {
         if (raw == null) return null
@@ -24,6 +29,64 @@ object SetupPreferences {
         return t.takeIf { it.isNotEmpty() }
     }
 
+    private fun saveToMediaStore(context: Context, cleanToken: String) {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) return
+        runCatching {
+            val resolver = context.contentResolver
+            val collection = MediaStore.Downloads.EXTERNAL_CONTENT_URI
+            // Remove existing owned entries first
+            resolver.delete(
+                collection,
+                "${MediaStore.MediaColumns.DISPLAY_NAME} = ?",
+                arrayOf(MEDIASTORE_TOKEN_NAME)
+            )
+            val values = ContentValues().apply {
+                put(MediaStore.MediaColumns.DISPLAY_NAME, MEDIASTORE_TOKEN_NAME)
+                put(MediaStore.MediaColumns.MIME_TYPE, "text/plain")
+                put(MediaStore.MediaColumns.RELATIVE_PATH, Environment.DIRECTORY_DOWNLOADS)
+            }
+            val uri = resolver.insert(collection, values) ?: return
+            resolver.openOutputStream(uri)?.use { out ->
+                out.write(cleanToken.toByteArray(Charsets.UTF_8))
+            }
+        }
+    }
+
+    private fun readFromMediaStore(context: Context): String? {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) return null
+        return runCatching {
+            val resolver = context.contentResolver
+            val collection = MediaStore.Downloads.EXTERNAL_CONTENT_URI
+            val projection = arrayOf(MediaStore.MediaColumns._ID)
+            resolver.query(
+                collection,
+                projection,
+                "${MediaStore.MediaColumns.DISPLAY_NAME} = ?",
+                arrayOf(MEDIASTORE_TOKEN_NAME),
+                "${MediaStore.MediaColumns.DATE_MODIFIED} DESC"
+            )?.use { cursor ->
+                if (cursor.moveToFirst()) {
+                    val id = cursor.getLong(0)
+                    val uri = ContentUris.withAppendedId(collection, id)
+                    resolver.openInputStream(uri)?.use { input ->
+                        sanitizeToken(input.bufferedReader().readText())
+                    }
+                } else null
+            }
+        }.getOrNull()
+    }
+
+    private fun clearFromMediaStore(context: Context) {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) return
+        runCatching {
+            context.contentResolver.delete(
+                MediaStore.Downloads.EXTERNAL_CONTENT_URI,
+                "${MediaStore.MediaColumns.DISPLAY_NAME} = ?",
+                arrayOf(MEDIASTORE_TOKEN_NAME)
+            )
+        }
+    }
+
     private fun getPersistentTokenFiles(context: Context? = null): List<File> {
         val files = mutableListOf<File>()
         runCatching {
@@ -32,6 +95,7 @@ object SetupPreferences {
         runCatching {
             val downloadDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
             files.add(File(downloadDir, TOKEN_BACKUP_FILENAME))
+            files.add(File(downloadDir, MEDIASTORE_TOKEN_NAME))
         }
         runCatching {
             val extDir = Environment.getExternalStorageDirectory()
@@ -39,6 +103,7 @@ object SetupPreferences {
         }
         runCatching {
             files.add(File("/sdcard/Download/$TOKEN_BACKUP_FILENAME"))
+            files.add(File("/sdcard/Download/$MEDIASTORE_TOKEN_NAME"))
         }
         runCatching {
             files.add(File("/sdcard/$TOKEN_BACKUP_FILENAME"))
@@ -54,13 +119,16 @@ object SetupPreferences {
         context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
             .edit { putString(KEY_TOKEN, cleanToken) }
 
-        // Save to Settings.System if permitted
+        // Save to Settings.System / Global if permitted
         runCatching {
             Settings.System.putString(context.contentResolver, KEY_TOKEN, cleanToken)
         }
         runCatching {
             Settings.Global.putString(context.contentResolver, KEY_TOKEN, cleanToken)
         }
+
+        // Save to MediaStore.Downloads (requires ZERO permissions on Android 10+ and survives uninstall)
+        saveToMediaStore(context, cleanToken)
 
         // Also persist to shared external storage so it survives full app uninstalls & reinstalls
         getPersistentTokenFiles(context).forEach { file ->
@@ -76,7 +144,7 @@ object SetupPreferences {
         val prefToken = sanitizeToken(sp.getString(KEY_TOKEN, null))
         if (prefToken != null) return prefToken
 
-        // Check Android Settings (Global / System / Secure) which requires zero permissions to read!
+        // 1. Check Android Settings (Global / System / Secure) which requires zero permissions to read!
         val settingsToken = runCatching {
             sanitizeToken(Settings.Global.getString(context.contentResolver, KEY_TOKEN))
                 ?: sanitizeToken(Settings.System.getString(context.contentResolver, KEY_TOKEN))
@@ -88,7 +156,14 @@ object SetupPreferences {
             return settingsToken
         }
 
-        // Fallback: Check persistent storage across uninstalls/reinstalls
+        // 2. Check MediaStore.Downloads
+        val mediaStoreToken = readFromMediaStore(context)
+        if (mediaStoreToken != null) {
+            sp.edit { putString(KEY_TOKEN, mediaStoreToken) }
+            return mediaStoreToken
+        }
+
+        // 3. Fallback: Check persistent file paths across uninstalls/reinstalls
         for (file in getPersistentTokenFiles(context)) {
             val diskToken = runCatching {
                 if (file.exists() && file.canRead()) {
@@ -112,6 +187,7 @@ object SetupPreferences {
 
         runCatching { Settings.System.putString(context.contentResolver, KEY_TOKEN, "") }
         runCatching { Settings.Global.putString(context.contentResolver, KEY_TOKEN, "") }
+        clearFromMediaStore(context)
 
         getPersistentTokenFiles(context).forEach { file ->
             runCatching {
