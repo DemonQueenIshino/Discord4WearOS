@@ -4,18 +4,15 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.wear.compose.foundation.lazy.ScalingLazyColumn
@@ -63,7 +60,7 @@ fun ServerScreen(
         else readState.entries.filter { it.key in dmIds }.sumOf { it.value.mentionCount }
     }
 
-    // Map guildId -> total mention count, using channelGuilds for attribution
+    // Map guildId -> total mention count
     val guildMentionCounts = remember(readState, channelGuilds, showBadges) {
         if (!showBadges) emptyMap()
         else {
@@ -87,49 +84,32 @@ fun ServerScreen(
         }
     }
 
+    val serverRows = remember(guilds) {
+        guilds.chunked(3)
+    }
+
     ScreenScaffold(scrollState = listState) {
         ScalingLazyColumn(
             state = listState,
             modifier = Modifier.fillMaxSize(),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
+            // Top circular button: Direct Messages (similar to the "recent apps" top icon in Wear OS launcher)
             item {
-                Text(
-                    text = "Discord",
-                    style = MaterialTheme.typography.titleMedium
-                )
-            }
-
-            // "First server" entry: Direct Messages button
-            item {
-                DirectMessagesEntryButton(
+                CircularDmButton(
                     mentionCount = dmMentionCount,
                     onClick = onNavigateToDms
                 )
             }
 
-            // Subtle divider between Direct Messages and the server list (like desktop/mobile Discord)
             item {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(vertical = 2.dp),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .width(48.dp)
-                            .height(2.dp)
-                            .background(
-                                MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.35f),
-                                RoundedCornerShape(1.dp)
-                            )
-                    )
-                }
+                Spacer(modifier = Modifier.height(2.dp))
             }
 
-            if (loading) {
-                item { CircularProgressIndicator() }
+            if (loading && guilds.isEmpty()) {
+                item {
+                    CircularProgressIndicator(modifier = Modifier.size(32.dp))
+                }
             } else if (guilds.isEmpty()) {
                 item {
                     Text(
@@ -139,14 +119,25 @@ fun ServerScreen(
                     )
                 }
             } else {
-                items(guilds.size) { index ->
-                    val guild = guilds[index]
-                    ServerButton(
-                        guild = guild,
-                        imageLoader = imageLoader,
-                        mentionCount = guildMentionCounts[guild.id] ?: 0,
-                        onClick = { onNavigateToChannels(guild.id, guild.name) }
-                    )
+                // 3-wide circular grid of servers
+                items(serverRows.size) { rowIndex ->
+                    val row = serverRows[rowIndex]
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 4.dp),
+                        horizontalArrangement = Arrangement.spacedBy(10.dp, Alignment.CenterHorizontally),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        row.forEach { guild ->
+                            CircularServerButton(
+                                guild = guild,
+                                imageLoader = imageLoader,
+                                mentionCount = guildMentionCounts[guild.id] ?: 0,
+                                onClick = { onNavigateToChannels(guild.id, guild.name) }
+                            )
+                        }
+                    }
                 }
             }
 
@@ -154,65 +145,36 @@ fun ServerScreen(
                 Spacer(modifier = Modifier.height(4.dp))
             }
 
+            // Bottom circular button: Settings
             item {
-                FilledIconButton(
-                    onClick = onNavigateToSettings,
-                    modifier = Modifier
-                        .height(40.dp)
-                        .width(40.dp)
-                ) {
-                    Icon(
-                        painter = painterResource(id = R.drawable.settings),
-                        contentDescription = "Settings"
-                    )
-                }
+                CircularSettingsButton(onClick = onNavigateToSettings)
             }
         }
     }
 }
 
 @Composable
-private fun DirectMessagesEntryButton(
+private fun CircularDmButton(
     mentionCount: Int = 0,
     onClick: () -> Unit
 ) {
     Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(52.dp)
-            .clip(RoundedCornerShape(26.dp))
-            .background(MaterialTheme.colorScheme.surfaceContainer)
-            .clickable(onClick = onClick)
+        modifier = Modifier.size(52.dp),
+        contentAlignment = Alignment.Center
     ) {
-        Row(
+        Box(
             modifier = Modifier
-                .matchParentSize()
-                .padding(horizontal = 12.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                .fillMaxSize()
+                .clip(CircleShape)
+                .background(Color(0xFF5865F2))
+                .clickable(onClick = onClick),
+            contentAlignment = Alignment.Center
         ) {
-            Box(
-                modifier = Modifier
-                    .size(32.dp)
-                    .background(Color(0xFF5865F2), CircleShape),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(
-                    painter = painterResource(id = R.drawable.ic_discord_dm),
-                    contentDescription = "Direct Messages",
-                    tint = Color.White,
-                    modifier = Modifier.size(18.dp)
-                )
-            }
-
-            Text(
-                text = "Direct Messages",
-                style = MaterialTheme.typography.bodySmall,
-                fontWeight = FontWeight.SemiBold,
-                color = MaterialTheme.colorScheme.onSurface,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.weight(1f)
+            Icon(
+                painter = painterResource(id = R.drawable.ic_discord_dm),
+                contentDescription = "Direct Messages",
+                tint = Color.White,
+                modifier = Modifier.size(26.dp)
             )
         }
 
@@ -220,7 +182,6 @@ private fun DirectMessagesEntryButton(
             Box(
                 modifier = Modifier
                     .align(Alignment.TopEnd)
-                    .padding(top = 4.dp, end = 6.dp)
                     .defaultMinSize(minWidth = 16.dp, minHeight = 16.dp)
                     .background(Color(0xFFF23F43), CircleShape)
                     .padding(horizontal = 3.dp),
@@ -238,96 +199,58 @@ private fun DirectMessagesEntryButton(
 }
 
 @Composable
-private fun ServerButton(
+private fun CircularServerButton(
     guild: Guild,
     imageLoader: ImageLoader,
     mentionCount: Int = 0,
     onClick: () -> Unit
 ) {
     val context = LocalContext.current
-    val bannerUrl = guild.bannerUrl()
-    val iconUrl = guild.iconUrl()
+    val iconUrl = guild.iconUrl(128)
 
     Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(52.dp)
-            .clip(RoundedCornerShape(26.dp))
-            .clickable(onClick = onClick)
+        modifier = Modifier.size(52.dp),
+        contentAlignment = Alignment.Center
     ) {
-        if (bannerUrl != null) {
-            AsyncImage(
-                model = ImageRequest.Builder(context).data(bannerUrl).crossfade(true).build(),
-                imageLoader = imageLoader,
-                contentDescription = null,
-                contentScale = ContentScale.Crop,
-                modifier = Modifier.matchParentSize()
-            )
-            Box(
-                modifier = Modifier
-                    .matchParentSize()
-                    .background(
-                        Brush.horizontalGradient(
-                            listOf(Color.Black.copy(0.55f), Color.Black.copy(0.30f))
-                        )
-                    )
-            )
-        } else {
-            Box(
-                modifier = Modifier
-                    .matchParentSize()
-                    .background(MaterialTheme.colorScheme.surfaceContainer)
-            )
-        }
-
-        Row(
+        Box(
             modifier = Modifier
-                .matchParentSize()
-                .padding(horizontal = 12.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                .fillMaxSize()
+                .clip(CircleShape)
+                .background(Color(0xFF313338))
+                .clickable(onClick = onClick),
+            contentAlignment = Alignment.Center
         ) {
             if (iconUrl != null) {
                 AsyncImage(
                     model = ImageRequest.Builder(context).data(iconUrl).crossfade(true).build(),
                     imageLoader = imageLoader,
-                    contentDescription = null,
+                    contentDescription = guild.name,
                     contentScale = ContentScale.Crop,
                     modifier = Modifier
-                        .size(32.dp)
+                        .fillMaxSize()
                         .clip(CircleShape)
                 )
             } else {
                 Box(
                     modifier = Modifier
-                        .size(32.dp)
+                        .fillMaxSize()
                         .background(Color(0xFF5865F2), CircleShape),
                     contentAlignment = Alignment.Center
                 ) {
                     Text(
                         text = guild.name.firstOrNull()?.uppercaseChar()?.toString() ?: "?",
                         color = Color.White,
-                        fontSize = 14.sp,
-                        style = MaterialTheme.typography.labelSmall
+                        fontSize = 18.sp,
+                        fontWeight = FontWeight.Bold
                     )
                 }
             }
-
-            Text(
-                text = guild.name,
-                style = MaterialTheme.typography.bodySmall,
-                color = if (bannerUrl != null) Color.White else MaterialTheme.colorScheme.onSurface,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.weight(1f)
-            )
         }
 
         if (mentionCount > 0) {
             Box(
                 modifier = Modifier
                     .align(Alignment.TopEnd)
-                    .padding(top = 4.dp, end = 6.dp)
                     .defaultMinSize(minWidth = 16.dp, minHeight = 16.dp)
                     .background(Color(0xFFF23F43), CircleShape)
                     .padding(horizontal = 3.dp),
@@ -341,5 +264,24 @@ private fun ServerButton(
                 )
             }
         }
+    }
+}
+
+@Composable
+private fun CircularSettingsButton(onClick: () -> Unit) {
+    Box(
+        modifier = Modifier
+            .size(52.dp)
+            .clip(CircleShape)
+            .background(MaterialTheme.colorScheme.surfaceContainer)
+            .clickable(onClick = onClick),
+        contentAlignment = Alignment.Center
+    ) {
+        Icon(
+            painter = painterResource(id = R.drawable.settings),
+            contentDescription = "Settings",
+            tint = MaterialTheme.colorScheme.onSurface,
+            modifier = Modifier.size(24.dp)
+        )
     }
 }
