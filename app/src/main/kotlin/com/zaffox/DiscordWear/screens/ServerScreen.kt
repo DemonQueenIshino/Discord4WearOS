@@ -163,6 +163,47 @@ object RuntimeServerListState {
             entries.add(dest, item)
         }
     }
+
+    fun reorderGuildInFolder(folderId: String, guildId: String, toIndex: Int) {
+        val folderIdx = entries.indexOfFirst {
+            it is ServerListEntry.FolderEntry && it.folderId == folderId
+        }
+        if (folderIdx == -1) return
+        val folder = entries[folderIdx] as ServerListEntry.FolderEntry
+        val fromIdx = folder.guilds.indexOfFirst { it.id == guildId }
+        if (fromIdx == -1) return
+
+        val mutableGuilds = folder.guilds.toMutableList()
+        val moved = mutableGuilds.removeAt(fromIdx)
+        val adjustedIdx = (if (toIndex > fromIdx) toIndex - 1 else toIndex).coerceIn(0, mutableGuilds.size)
+        mutableGuilds.add(adjustedIdx, moved)
+        entries[folderIdx] = folder.copy(guilds = mutableGuilds)
+    }
+
+    fun removeGuildFromFolder(folderId: String, guildId: String) {
+        val folderIdx = entries.indexOfFirst {
+            it is ServerListEntry.FolderEntry && it.folderId == folderId
+        }
+        if (folderIdx == -1) return
+        val folder = entries[folderIdx] as ServerListEntry.FolderEntry
+        val removedGuild = folder.guilds.find { it.id == guildId } ?: return
+        val remaining = folder.guilds.filter { it.id != guildId }
+
+        when {
+            remaining.isEmpty() -> {
+                entries[folderIdx] = ServerListEntry.SingleServer(removedGuild)
+            }
+            remaining.size == 1 -> {
+                // Dissolve 1-server folder back into two individual servers on the main grid
+                entries[folderIdx] = ServerListEntry.SingleServer(remaining.first())
+                entries.add(folderIdx + 1, ServerListEntry.SingleServer(removedGuild))
+            }
+            else -> {
+                entries[folderIdx] = folder.copy(guilds = remaining)
+                entries.add(folderIdx + 1, ServerListEntry.SingleServer(removedGuild))
+            }
+        }
+    }
 }
 
 private sealed class HexItem {
@@ -902,9 +943,15 @@ private fun CircularSettingsButton(onClick: () -> Unit) {
     }
 }
 
+private sealed class FolderDropAction {
+    object RemoveFromFolder : FolderDropAction()
+    data class Reorder(val targetIndex: Int, val highlightGuildId: String) : FolderDropAction()
+}
+
 /**
  * Screen displaying the servers inside a folder as a standard vertical list
- * with icons, names, and banners.
+ * with icons, names, and banners. Supports drag-to-reorder and dragging
+ * above the first server to remove from the folder.
  */
 @Composable
 fun FolderServersScreen(
@@ -915,6 +962,8 @@ fun FolderServersScreen(
     val context = LocalContext.current
     val repo = context.discordApp.repository ?: return
     val listState = rememberScalingLazyListState()
+    val haptics = LocalHapticFeedback.current
+    val density = LocalDensity.current
     val imageLoader = remember { ImageLoader.Builder(context).build() }
 
     val readState by repo.readState.collectAsState()
@@ -947,33 +996,202 @@ fun FolderServersScreen(
 
     if (folderEntry == null) return
 
+    val itemBounds = remember { mutableStateMapOf<String, Pair<Float, Float>>() } // guildId -> (topY, bottomY) in root
+    var headerBottomY by remember { mutableStateOf(0f) }
+    var rootOffset by remember { mutableStateOf(Offset.Zero) }
+    var draggedGuild by remember { mutableStateOf<Guild?>(null) }
+    var dragPositionInRoot by remember { mutableStateOf(Offset.Zero) }
+    var activeFolderDrop by remember { mutableStateOf<FolderDropAction?>(null) }
+
+    val rowHalfHeightPx = with(density) { 26.dp.toPx() }
+    val rowWidthPx = with(density) { 150.dp.toPx() }
+
+    fun evaluateFolderDrop(pointerY: Float, currentDragged: Guild): FolderDropAction? {
+        val firstGuild = folderEntry.guilds.firstOrNull() ?: return null
+        val firstBounds = itemBounds[firstGuild.id]
+        val removeThresholdY = if (firstBounds != null) {
+            firstBounds.first - with(density) { 6.dp.toPx() }
+        } else {
+            headerBottomY
+        }
+
+        // If dragged above the top of the first server, trigger RemoveFromFolder
+        if (pointerY < removeThresholdY) {
+            return FolderDropAction.RemoveFromFolder
+        }
+
+        var closestGuildId: String? = null
+        var closestDist = Float.MAX_VALUE
+        var closestCenterY = 0f
+
+        for (g in folderEntry.guilds) {
+            if (g.id == currentDragged.id) continue
+            val bounds = itemBounds[g.id] ?: continue
+            val centerY = (bounds.first + bounds.second) / 2f
+            val dist = kotlin.math.abs(pointerY - centerY)
+            if (dist < closestDist) {
+                closestDist = dist
+                closestGuildId = g.id
+                closestCenterY = centerY
+            }
+        }
+
+        val targetId = closestGuildId ?: return null
+        val targetIdx = folderEntry.guilds.indexOfFirst { it.id == targetId }
+        if (targetIdx == -1) return null
+
+        val insertAfter = pointerY > closestCenterY
+        val insertIndex = if (insertAfter) targetIdx + 1 else targetIdx
+        return FolderDropAction.Reorder(insertIndex, targetId)
+    }
+
     ScreenScaffold(scrollState = listState) {
-        ScalingLazyColumn(
-            state = listState,
-            modifier = Modifier.fillMaxSize(),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(6.dp)
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .onGloballyPositioned { coords ->
+                    rootOffset = coords.positionInRoot()
+                }
         ) {
-            item {
-                Text(
-                    text = folderEntry.name,
-                    style = MaterialTheme.typography.titleSmall,
-                    color = MaterialTheme.colorScheme.onSurface,
-                    textAlign = TextAlign.Center,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(bottom = 2.dp)
-                )
+            ScalingLazyColumn(
+                state = listState,
+                userScrollEnabled = draggedGuild == null,
+                modifier = Modifier.fillMaxSize(),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                item {
+                    val isRemoveActive = activeFolderDrop is FolderDropAction.RemoveFromFolder
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 2.dp)
+                            .clip(RoundedCornerShape(16.dp))
+                            .background(
+                                if (isRemoveActive) Color(0xFFF23F43).copy(alpha = 0.28f)
+                                else if (draggedGuild != null) MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.6f)
+                                else Color.Transparent
+                            )
+                            .then(
+                                if (isRemoveActive) Modifier.border(1.5.dp, Color(0xFFF23F43), RoundedCornerShape(16.dp))
+                                else Modifier
+                            )
+                            .padding(vertical = 6.dp, horizontal = 8.dp)
+                            .onGloballyPositioned { coords ->
+                                headerBottomY = coords.positionInRoot().y + coords.size.height
+                            },
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = if (draggedGuild != null) "Drag here to remove" else folderEntry.name,
+                            style = MaterialTheme.typography.titleSmall,
+                            color = if (isRemoveActive) Color(0xFFF23F43) else MaterialTheme.colorScheme.onSurface,
+                            textAlign = TextAlign.Center,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
+                }
+
+                items(folderEntry.guilds.size) { index ->
+                    val guild = folderEntry.guilds[index]
+                    val isBeingDragged = draggedGuild?.id == guild.id
+                    val isReorderTarget = (activeFolderDrop as? FolderDropAction.Reorder)?.highlightGuildId == guild.id
+                    var itemCenter by remember { mutableStateOf(Offset.Zero) }
+
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .alpha(if (isBeingDragged) 0.28f else 1f)
+                            .onGloballyPositioned { coords ->
+                                val pos = coords.positionInRoot()
+                                val topY = pos.y
+                                val bottomY = pos.y + coords.size.height
+                                itemBounds[guild.id] = topY to bottomY
+                                itemCenter = Offset(
+                                    pos.x + coords.size.width / 2f,
+                                    pos.y + coords.size.height / 2f
+                                )
+                            }
+                            .pointerInput(guild.id) {
+                                detectDragGesturesAfterLongPress(
+                                    onDragStart = {
+                                        haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                                        draggedGuild = guild
+                                        dragPositionInRoot = itemCenter
+                                        activeFolderDrop = null
+                                    },
+                                    onDrag = { change, dragAmount ->
+                                        change.consume()
+                                        dragPositionInRoot += dragAmount
+                                        draggedGuild?.let { current ->
+                                            val next = evaluateFolderDrop(dragPositionInRoot.y, current)
+                                            if (next != activeFolderDrop && next is FolderDropAction.RemoveFromFolder) {
+                                                haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                            }
+                                            activeFolderDrop = next
+                                        }
+                                    },
+                                    onDragEnd = {
+                                        val current = draggedGuild
+                                        val action = activeFolderDrop
+                                        if (current != null && action != null) {
+                                            when (action) {
+                                                is FolderDropAction.RemoveFromFolder -> {
+                                                    RuntimeServerListState.removeGuildFromFolder(folderId, current.id)
+                                                }
+                                                is FolderDropAction.Reorder -> {
+                                                    RuntimeServerListState.reorderGuildInFolder(folderId, current.id, action.targetIndex)
+                                                }
+                                            }
+                                        }
+                                        draggedGuild = null
+                                        activeFolderDrop = null
+                                    },
+                                    onDragCancel = {
+                                        draggedGuild = null
+                                        activeFolderDrop = null
+                                    }
+                                )
+                            }
+                    ) {
+                        FolderServerListButton(
+                            guild = guild,
+                            imageLoader = imageLoader,
+                            mentionCount = guildMentionCounts[guild.id] ?: 0,
+                            isReorderTarget = isReorderTarget,
+                            onClick = { onNavigateToChannels(guild.id, guild.name) }
+                        )
+                    }
+                }
             }
 
-            items(folderEntry.guilds.size) { index ->
-                val guild = folderEntry.guilds[index]
-                FolderServerListButton(
-                    guild = guild,
-                    imageLoader = imageLoader,
-                    mentionCount = guildMentionCounts[guild.id] ?: 0,
-                    onClick = { onNavigateToChannels(guild.id, guild.name) }
-                )
+            // Floating dragged server pill overlay
+            val activeDragged = draggedGuild
+            if (activeDragged != null) {
+                val localPos = dragPositionInRoot - rootOffset
+                val isRemoving = activeFolderDrop is FolderDropAction.RemoveFromFolder
+                Box(
+                    modifier = Modifier
+                        .offset {
+                            IntOffset(
+                                x = (localPos.x - rowWidthPx / 2f).roundToInt(),
+                                y = (localPos.y - rowHalfHeightPx).roundToInt()
+                            )
+                        }
+                        .width(150.dp)
+                        .zIndex(10f)
+                        .scale(if (isRemoving) 0.92f else 1.04f)
+                        .alpha(0.92f)
+                ) {
+                    FolderServerListButton(
+                        guild = activeDragged,
+                        imageLoader = imageLoader,
+                        mentionCount = 0,
+                        isReorderTarget = isRemoving,
+                        onClick = {}
+                    )
+                }
             }
         }
     }
@@ -984,6 +1202,7 @@ private fun FolderServerListButton(
     guild: Guild,
     imageLoader: ImageLoader,
     mentionCount: Int = 0,
+    isReorderTarget: Boolean = false,
     onClick: () -> Unit
 ) {
     val context = LocalContext.current
@@ -994,6 +1213,10 @@ private fun FolderServerListButton(
         modifier = Modifier
             .fillMaxWidth()
             .height(52.dp)
+            .then(
+                if (isReorderTarget) Modifier.border(2.dp, Color.White.copy(alpha = 0.8f), RoundedCornerShape(26.dp))
+                else Modifier
+            )
             .clip(RoundedCornerShape(26.dp))
             .clickable(onClick = onClick)
     ) {
