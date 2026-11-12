@@ -7,7 +7,8 @@ import android.util.Log
 
 class TokenBroadcastReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
-        if (intent.action == "com.zaffox.discordwear.SET_TOKEN") {
+        if (intent.action == "com.demonqueenishino.Discord4WOS.SET_TOKEN" ||
+            intent.action == "com.zaffox.discordwear.SET_TOKEN") {
             val rawToken = intent.getStringExtra("token")
             if (!rawToken.isNullOrBlank()) {
                 Log.d("TokenReceiver", "Received token via ADB broadcast")

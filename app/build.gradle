@@ -15,7 +15,7 @@ android {
     }
 
     defaultConfig {
-        applicationId "com.zaffox.discordwear"
+        applicationId "com.demonqueenishino.Discord4WOS"
         minSdk 30
         targetSdk 35
         versionCode 10

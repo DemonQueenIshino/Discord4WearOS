@@ -36,6 +36,7 @@
             android:name=".TokenBroadcastReceiver"
             android:exported="true">
             <intent-filter>
+                <action android:name="com.demonqueenishino.Discord4WOS.SET_TOKEN" />
                 <action android:name="com.zaffox.discordwear.SET_TOKEN" />
             </intent-filter>
         </receiver>
