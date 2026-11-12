@@ -5,6 +5,7 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -24,26 +25,26 @@ import com.google.zxing.EncodeHintType
 import com.google.zxing.qrcode.QRCodeWriter
 import com.zaffox.discordwear.RemoteAuthClient
 import com.zaffox.discordwear.RemoteAuthState
-import com.zaffox.discordwear.RemoteAuthStatus
 import com.zaffox.discordwear.SetupPreferences
 import com.zaffox.discordwear.api.DiscordRestClient
 import com.zaffox.discordwear.discordApp
 import kotlinx.coroutines.launch
 
 @Composable
-fun QrLoginScreen(onSetupComplete: () -> Unit, onBack: () -> Unit) {
+fun QrLoginScreen(onSetupComplete: () -> Unit) {
     val context = LocalContext.current
     val listState = rememberScalingLazyListState()
 
     val scope = rememberCoroutineScope()
     var state by remember { mutableStateOf<RemoteAuthState>(RemoteAuthState.Connecting) }
-    var status by remember { mutableStateOf(RemoteAuthStatus()) }
     var client by remember { mutableStateOf<RemoteAuthClient?>(null) }
 
-    LaunchedEffect(Unit) {
+    fun startQrSession() {
+        client?.disconnect()
+        state = RemoteAuthState.Connecting
         val c = RemoteAuthClient(
             onStateChange = { newState -> state = newState },
-            onStatusUpdate = { newStatus -> status = newStatus },
+            onStatusUpdate = {},
             onTokenReceived = { token ->
                 scope.launch {
                     state = RemoteAuthState.Connecting
@@ -62,6 +63,10 @@ fun QrLoginScreen(onSetupComplete: () -> Unit, onBack: () -> Unit) {
         c.connect()
     }
 
+    LaunchedEffect(Unit) {
+        startQrSession()
+    }
+
     val activity = context as? android.app.Activity
     DisposableEffect(activity) {
         activity?.window?.addFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
@@ -78,74 +83,36 @@ fun QrLoginScreen(onSetupComplete: () -> Unit, onBack: () -> Unit) {
             modifier = Modifier.fillMaxSize()
         ) {
             when (val s = state) {
-                is RemoteAuthState.CaptchaRequired -> {
-                    item {
-                        Text(
-                            "Captcha Required",
-                            style = MaterialTheme.typography.titleSmall,
-                            color = MaterialTheme.colorScheme.error,
-                            textAlign = TextAlign.Center
-                        )
-                    }
-                    item {
-                        Text(
-                            "Discord is requiring a captcha. Check if a VPN/Proxy is enabled and try again on a regular connection.",
-                            style = MaterialTheme.typography.labelSmall,
-                            textAlign = TextAlign.Center,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(horizontal = 8.dp)
-                        )
-                    }
-                    item {
-                        Button(
-                            onClick = { client?.disconnect(); onBack() },
-                            modifier = Modifier
-                                .fillMaxWidth(0.7f)
-                                .height(32.dp),
-                            colors = ButtonDefaults.filledTonalButtonColors()
-                        ) { Text("Go Back") }
-                    }
-                }
-
                 is RemoteAuthState.Connecting -> {
                     item {
                         Text(
-                            "Connecting…",
-                            style = MaterialTheme.typography.titleSmall,
-                            textAlign = TextAlign.Center
-                        )
-                    }
-                    item { CircularProgressIndicator(modifier = Modifier.size(28.dp)) }
-                    // Verbose log lines
-                    items(status.lines.size) { i ->
-                        Text(
-                            status.lines[i],
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            textAlign = TextAlign.Start,
+                            "Scan with Discord app to log in",
+                            style = MaterialTheme.typography.labelMedium,
+                            textAlign = TextAlign.Center,
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .padding(horizontal = 8.dp, vertical = 1.dp)
+                                .padding(horizontal = 12.dp, vertical = 4.dp)
                         )
                     }
                     item {
-                        Button(
-                            onClick = { client?.disconnect(); onBack() },
-                            modifier = Modifier
-                                .fillMaxWidth(0.7f)
-                                .height(32.dp),
-                            colors = ButtonDefaults.filledTonalButtonColors()
-                        ) { Text("Cancel") }
+                        Box(
+                            modifier = Modifier.size(130.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            CircularProgressIndicator(modifier = Modifier.size(28.dp))
+                        }
                     }
                 }
 
                 is RemoteAuthState.WaitingForScan -> {
                     item {
                         Text(
-                            "Scan with Discord",
-                            style = MaterialTheme.typography.titleSmall,
-                            textAlign = TextAlign.Center
+                            "Scan with Discord app to log in",
+                            style = MaterialTheme.typography.labelMedium,
+                            textAlign = TextAlign.Center,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 12.dp, vertical = 4.dp)
                         )
                     }
                     item {
@@ -153,28 +120,10 @@ fun QrLoginScreen(onSetupComplete: () -> Unit, onBack: () -> Unit) {
                             content = "https://discord.com/ra/${s.fingerprint}",
                             modifier = Modifier
                                 .size(130.dp)
+                                .clip(RoundedCornerShape(8.dp))
                                 .background(Color.White)
-                                .padding(4.dp)
+                                .padding(6.dp)
                         )
-                    }
-                    item {
-                        Text(
-                            "Profile → Scan QR Code in the Discord app",
-                            style = MaterialTheme.typography.labelSmall,
-                            textAlign = TextAlign.Center,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(horizontal = 8.dp)
-                        )
-                    }
-                    item {
-                        Button(
-                            onClick = { client?.disconnect(); onBack() },
-                            modifier = Modifier
-                                .fillMaxWidth(0.7f)
-                                .height(32.dp),
-                            colors = ButtonDefaults.filledTonalButtonColors()
-                        ) { Text("Cancel") }
                     }
                 }
 
@@ -223,49 +172,13 @@ fun QrLoginScreen(onSetupComplete: () -> Unit, onBack: () -> Unit) {
                             color = MaterialTheme.colorScheme.primary
                         )
                     }
-                    item {
-                        Text(
-                            "Tap 'Log In' in the Discord app",
-                            style = MaterialTheme.typography.labelSmall,
-                            textAlign = TextAlign.Center,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(horizontal = 8.dp)
-                        )
-                    }
                     item { CircularProgressIndicator(modifier = Modifier.size(24.dp)) }
                 }
 
-                is RemoteAuthState.Canceled -> {
+                is RemoteAuthState.CaptchaRequired -> {
                     item {
                         Text(
-                            "Canceled",
-                            style = MaterialTheme.typography.titleSmall,
-                            textAlign = TextAlign.Center
-                        )
-                    }
-                    item {
-                        Text(
-                            "Login was canceled on your phone.",
-                            style = MaterialTheme.typography.bodySmall,
-                            textAlign = TextAlign.Center
-                        )
-                    }
-                    item {
-                        Button(
-                            onClick = { onBack() },
-                            modifier = Modifier
-                                .fillMaxWidth(0.7f)
-                                .height(32.dp),
-                            colors = ButtonDefaults.filledTonalButtonColors()
-                        ) { Text("Go Back") }
-                    }
-                }
-
-                is RemoteAuthState.Error -> {
-                    item {
-                        Text(
-                            "Error",
+                            "Captcha Required",
                             style = MaterialTheme.typography.titleSmall,
                             color = MaterialTheme.colorScheme.error,
                             textAlign = TextAlign.Center
@@ -273,31 +186,62 @@ fun QrLoginScreen(onSetupComplete: () -> Unit, onBack: () -> Unit) {
                     }
                     item {
                         Text(
-                            s.message,
-                            style = MaterialTheme.typography.bodySmall,
-                            textAlign = TextAlign.Center,
-                            modifier = Modifier.padding(horizontal = 8.dp)
-                        )
-                    }
-                    // Show log even on error so we can debug
-                    items(status.lines.size) { i ->
-                        Text(
-                            status.lines[i],
+                            "Check if a VPN/Proxy is enabled and try again.",
                             style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            textAlign = TextAlign.Start,
+                            textAlign = TextAlign.Center,
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .padding(horizontal = 8.dp, vertical = 1.dp)
+                                .padding(horizontal = 8.dp)
                         )
                     }
                     item {
                         Button(
-                            onClick = { onBack() },
+                            onClick = { startQrSession() },
                             modifier = Modifier
                                 .fillMaxWidth(0.7f)
-                                .height(32.dp)
-                        ) { Text("Go Back") }
+                                .height(32.dp),
+                            colors = ButtonDefaults.filledTonalButtonColors()
+                        ) { Text("Retry") }
+                    }
+                }
+
+                is RemoteAuthState.Canceled -> {
+                    item {
+                        Text(
+                            "Login Canceled",
+                            style = MaterialTheme.typography.titleSmall,
+                            textAlign = TextAlign.Center
+                        )
+                    }
+                    item {
+                        Button(
+                            onClick = { startQrSession() },
+                            modifier = Modifier
+                                .fillMaxWidth(0.7f)
+                                .height(32.dp),
+                            colors = ButtonDefaults.filledTonalButtonColors()
+                        ) { Text("Retry") }
+                    }
+                }
+
+                is RemoteAuthState.Error -> {
+                    item {
+                        Text(
+                            s.message,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.error,
+                            textAlign = TextAlign.Center,
+                            modifier = Modifier.padding(horizontal = 8.dp)
+                        )
+                    }
+                    item {
+                        Button(
+                            onClick = { startQrSession() },
+                            modifier = Modifier
+                                .fillMaxWidth(0.7f)
+                                .height(32.dp),
+                            colors = ButtonDefaults.filledTonalButtonColors()
+                        ) { Text("Retry") }
                     }
                 }
             }

@@ -79,21 +79,12 @@ class MainActivity : ComponentActivity() {
                         }
 
                         composable("Welcome") {
-                            WelcomeScreen(
-                                onNavigateToQrLogin = {
-                                    navController.navigate("qrlogin")
-                                }
-                            )
-                        }
-
-                        composable("qrlogin") {
                             QrLoginScreen(
                                 onSetupComplete = {
                                     navController.navigate("home") {
                                         popUpTo(0) { inclusive = true }
                                     }
-                                },
-                                onBack = { navController.popBackStack() }
+                                }
                             )
                         }
 
