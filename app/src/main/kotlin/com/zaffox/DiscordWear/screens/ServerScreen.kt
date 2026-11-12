@@ -95,10 +95,8 @@ object RuntimeServerListState {
                         val freshGuilds = entry.guilds.mapNotNull { g ->
                             guildById[g.id]?.also { seenIds.add(it.id) }
                         }
-                        if (freshGuilds.size >= 2) {
+                        if (freshGuilds.isNotEmpty()) {
                             updated.add(entry.copy(guilds = freshGuilds))
-                        } else if (freshGuilds.size == 1) {
-                            updated.add(ServerListEntry.SingleServer(freshGuilds.first()))
                         }
                     }
                 }
@@ -189,19 +187,14 @@ object RuntimeServerListState {
         val removedGuild = folder.guilds.find { it.id == guildId } ?: return
         val remaining = folder.guilds.filter { it.id != guildId }
 
-        when {
-            remaining.isEmpty() -> {
-                entries[folderIdx] = ServerListEntry.SingleServer(removedGuild)
-            }
-            remaining.size == 1 -> {
-                // Dissolve 1-server folder back into two individual servers on the main grid
-                entries[folderIdx] = ServerListEntry.SingleServer(remaining.first())
-                entries.add(folderIdx + 1, ServerListEntry.SingleServer(removedGuild))
-            }
-            else -> {
-                entries[folderIdx] = folder.copy(guilds = remaining)
-                entries.add(folderIdx + 1, ServerListEntry.SingleServer(removedGuild))
-            }
+        if (remaining.isEmpty()) {
+            // Only collapse/delete the folder if it becomes completely empty
+            entries.removeAt(folderIdx)
+            entries.add(folderIdx, ServerListEntry.SingleServer(removedGuild))
+        } else {
+            // Folder keeps existing with remaining servers (even with 1 server left)
+            entries[folderIdx] = folder.copy(guilds = remaining)
+            entries.add(folderIdx + 1, ServerListEntry.SingleServer(removedGuild))
         }
     }
 }
@@ -838,23 +831,32 @@ private fun CircularFolderButton(
                 .padding(7.dp),
             contentAlignment = Alignment.Center
         ) {
-            Column(
-                verticalArrangement = Arrangement.spacedBy(3.dp, Alignment.CenterVertically),
-                horizontalAlignment = Alignment.CenterHorizontally
-            ) {
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(3.dp, Alignment.CenterHorizontally),
-                    verticalAlignment = Alignment.CenterVertically
+            if (folder.guilds.size == 1) {
+                MiniGuildAvatar(
+                    guild = folder.guilds.first(),
+                    imageLoader = imageLoader,
+                    context = context,
+                    size = 26.dp
+                )
+            } else {
+                Column(
+                    verticalArrangement = Arrangement.spacedBy(3.dp, Alignment.CenterVertically),
+                    horizontalAlignment = Alignment.CenterHorizontally
                 ) {
-                    MiniGuildAvatar(guild = previewGuilds.getOrNull(0), imageLoader = imageLoader, context = context)
-                    MiniGuildAvatar(guild = previewGuilds.getOrNull(1), imageLoader = imageLoader, context = context)
-                }
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(3.dp, Alignment.CenterHorizontally),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    MiniGuildAvatar(guild = previewGuilds.getOrNull(2), imageLoader = imageLoader, context = context)
-                    MiniGuildAvatar(guild = previewGuilds.getOrNull(3), imageLoader = imageLoader, context = context)
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(3.dp, Alignment.CenterHorizontally),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        MiniGuildAvatar(guild = previewGuilds.getOrNull(0), imageLoader = imageLoader, context = context)
+                        MiniGuildAvatar(guild = previewGuilds.getOrNull(1), imageLoader = imageLoader, context = context)
+                    }
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(3.dp, Alignment.CenterHorizontally),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        MiniGuildAvatar(guild = previewGuilds.getOrNull(2), imageLoader = imageLoader, context = context)
+                        MiniGuildAvatar(guild = previewGuilds.getOrNull(3), imageLoader = imageLoader, context = context)
+                    }
                 }
             }
         }
@@ -869,10 +871,11 @@ private fun CircularFolderButton(
 private fun MiniGuildAvatar(
     guild: Guild?,
     imageLoader: ImageLoader,
-    context: android.content.Context
+    context: android.content.Context,
+    size: androidx.compose.ui.unit.Dp = 15.dp
 ) {
     if (guild == null) {
-        Spacer(modifier = Modifier.size(15.dp))
+        Spacer(modifier = Modifier.size(size))
         return
     }
     val iconUrl = guild.iconUrl(64)
@@ -883,20 +886,20 @@ private fun MiniGuildAvatar(
             contentDescription = guild.name,
             contentScale = ContentScale.Crop,
             modifier = Modifier
-                .size(15.dp)
+                .size(size)
                 .clip(CircleShape)
         )
     } else {
         Box(
             modifier = Modifier
-                .size(15.dp)
+                .size(size)
                 .background(Color(0xFF5865F2), CircleShape),
             contentAlignment = Alignment.Center
         ) {
             Text(
                 text = guild.name.firstOrNull()?.uppercaseChar()?.toString() ?: "?",
                 color = Color.White,
-                fontSize = 7.sp,
+                fontSize = if (size > 20.dp) 12.sp else 7.sp,
                 fontWeight = FontWeight.Bold
             )
         }
