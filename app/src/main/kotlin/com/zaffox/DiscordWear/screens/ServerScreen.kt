@@ -27,6 +27,17 @@ import com.zaffox.discordwear.api.Guild
 import com.zaffox.discordwear.discordApp
 import kotlinx.coroutines.launch
 
+private sealed class HexItem {
+    data class DirectMessages(val mentionCount: Int) : HexItem()
+    data class Server(val guild: Guild, val mentionCount: Int) : HexItem()
+    object Settings : HexItem()
+}
+
+private sealed class HexRow {
+    data class Center(val item: HexItem) : HexRow()
+    data class Pair(val left: HexItem, val right: HexItem?) : HexRow()
+}
+
 @Composable
 fun ServerScreen(
     onNavigateToDms: () -> Unit,
@@ -84,91 +95,128 @@ fun ServerScreen(
         }
     }
 
-    val serverRows = remember(guilds) {
-        guilds.chunked(3)
+    // Build the 1 - 2 - 1 - 2 honeycomb rows starting with DMs at the top center
+    val hexRows = remember(guilds, dmMentionCount, guildMentionCounts) {
+        val items = mutableListOf<HexItem>()
+        items.add(HexItem.DirectMessages(dmMentionCount))
+        guilds.forEach { guild ->
+            items.add(HexItem.Server(guild, guildMentionCounts[guild.id] ?: 0))
+        }
+        items.add(HexItem.Settings)
+
+        val rows = mutableListOf<HexRow>()
+        var index = 0
+        var isCenterRow = true
+        while (index < items.size) {
+            if (isCenterRow) {
+                rows.add(HexRow.Center(items[index]))
+                index += 1
+            } else {
+                val left = items[index]
+                val right = items.getOrNull(index + 1)
+                rows.add(HexRow.Pair(left, right))
+                index += if (right != null) 2 else 1
+            }
+            isCenterRow = !isCenterRow
+        }
+        rows
     }
 
     ScreenScaffold(scrollState = listState) {
         ScalingLazyColumn(
             state = listState,
             modifier = Modifier.fillMaxSize(),
-            horizontalAlignment = Alignment.CenterHorizontally
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy((-14).dp)
         ) {
-            // Top circular button: Direct Messages (similar to the "recent apps" top icon in Wear OS launcher)
-            item {
-                CircularDmButton(
-                    mentionCount = dmMentionCount,
-                    onClick = onNavigateToDms
-                )
-            }
-
-            item {
-                Spacer(modifier = Modifier.height(14.dp))
-            }
-
             if (loading && guilds.isEmpty()) {
                 item {
                     CircularProgressIndicator(modifier = Modifier.size(32.dp))
                 }
-            } else if (guilds.isEmpty()) {
-                item {
-                    Text(
-                        "No servers found.",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
             } else {
-                // Hexagonal staggered 3-wide circular grid of servers
-                items(serverRows.size) { rowIndex ->
-                    val row = serverRows[rowIndex]
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(vertical = 4.dp),
-                        horizontalArrangement = Arrangement.spacedBy(10.dp, Alignment.CenterHorizontally),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        if (row.size == 1) {
-                            val guild = row[0]
-                            CircularServerButton(
-                                guild = guild,
-                                imageLoader = imageLoader,
-                                mentionCount = guildMentionCounts[guild.id] ?: 0,
-                                onClick = { onNavigateToChannels(guild.id, guild.name) }
-                            )
-                        } else {
-                            for (colIndex in 0 until 3) {
-                                val guild = row.getOrNull(colIndex)
-                                val isSideColumn = colIndex == 0 || colIndex == 2
-                                val yOffset = if (isSideColumn) (-24).dp else 0.dp
+                items(hexRows.size) { rowIndex ->
+                    when (val row = hexRows[rowIndex]) {
+                        is HexRow.Center -> {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(50.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                RenderHexItem(
+                                    item = row.item,
+                                    imageLoader = imageLoader,
+                                    onNavigateToDms = onNavigateToDms,
+                                    onNavigateToChannels = onNavigateToChannels,
+                                    onNavigateToSettings = onNavigateToSettings
+                                )
+                            }
+                        }
 
-                                if (guild != null) {
-                                    Box(modifier = Modifier.offset(y = yOffset)) {
-                                        CircularServerButton(
-                                            guild = guild,
+                        is HexRow.Pair -> {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(50.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Row(
+                                    horizontalArrangement = Arrangement.spacedBy(66.dp, Alignment.CenterHorizontally),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    RenderHexItem(
+                                        item = row.left,
+                                        imageLoader = imageLoader,
+                                        onNavigateToDms = onNavigateToDms,
+                                        onNavigateToChannels = onNavigateToChannels,
+                                        onNavigateToSettings = onNavigateToSettings
+                                    )
+                                    if (row.right != null) {
+                                        RenderHexItem(
+                                            item = row.right,
                                             imageLoader = imageLoader,
-                                            mentionCount = guildMentionCounts[guild.id] ?: 0,
-                                            onClick = { onNavigateToChannels(guild.id, guild.name) }
+                                            onNavigateToDms = onNavigateToDms,
+                                            onNavigateToChannels = onNavigateToChannels,
+                                            onNavigateToSettings = onNavigateToSettings
                                         )
+                                    } else {
+                                        Spacer(modifier = Modifier.size(50.dp))
                                     }
-                                } else {
-                                    Spacer(modifier = Modifier.size(52.dp))
                                 }
                             }
                         }
                     }
                 }
             }
+        }
+    }
+}
 
-            item {
-                Spacer(modifier = Modifier.height(4.dp))
-            }
-
-            // Bottom circular button: Settings
-            item {
-                CircularSettingsButton(onClick = onNavigateToSettings)
-            }
+@Composable
+private fun RenderHexItem(
+    item: HexItem,
+    imageLoader: ImageLoader,
+    onNavigateToDms: () -> Unit,
+    onNavigateToChannels: (guildId: String, guildName: String) -> Unit,
+    onNavigateToSettings: () -> Unit
+) {
+    when (item) {
+        is HexItem.DirectMessages -> {
+            CircularDmButton(
+                mentionCount = item.mentionCount,
+                onClick = onNavigateToDms
+            )
+        }
+        is HexItem.Server -> {
+            CircularServerButton(
+                guild = item.guild,
+                imageLoader = imageLoader,
+                mentionCount = item.mentionCount,
+                onClick = { onNavigateToChannels(item.guild.id, item.guild.name) }
+            )
+        }
+        is HexItem.Settings -> {
+            CircularSettingsButton(onClick = onNavigateToSettings)
         }
     }
 }
@@ -179,7 +227,7 @@ private fun CircularDmButton(
     onClick: () -> Unit
 ) {
     Box(
-        modifier = Modifier.size(52.dp),
+        modifier = Modifier.size(50.dp),
         contentAlignment = Alignment.Center
     ) {
         Box(
@@ -229,7 +277,7 @@ private fun CircularServerButton(
     val iconUrl = guild.iconUrl(128)
 
     Box(
-        modifier = Modifier.size(52.dp),
+        modifier = Modifier.size(50.dp),
         contentAlignment = Alignment.Center
     ) {
         Box(
@@ -291,7 +339,7 @@ private fun CircularServerButton(
 private fun CircularSettingsButton(onClick: () -> Unit) {
     Box(
         modifier = Modifier
-            .size(52.dp)
+            .size(50.dp)
             .clip(CircleShape)
             .background(MaterialTheme.colorScheme.surfaceContainer)
             .clickable(onClick = onClick),
