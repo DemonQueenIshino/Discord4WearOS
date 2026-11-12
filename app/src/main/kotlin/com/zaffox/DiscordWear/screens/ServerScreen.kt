@@ -88,7 +88,11 @@ fun ServerScreen(
     }
 
     ScreenScaffold(scrollState = listState) {
-        ScalingLazyColumn(state = listState) {
+        ScalingLazyColumn(
+            state = listState,
+            modifier = Modifier.fillMaxSize(),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
             item {
                 Text(
                     text = "Discord",

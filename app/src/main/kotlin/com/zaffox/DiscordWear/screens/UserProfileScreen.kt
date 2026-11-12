@@ -75,7 +75,8 @@ fun UserProfileScreen(
     ScreenScaffold(scrollState = listState) {
         ScalingLazyColumn(
             state = listState,
-            modifier = Modifier.fillMaxSize()
+            modifier = Modifier.fillMaxSize(),
+            horizontalAlignment = Alignment.CenterHorizontally
         ) {
             item {
                 val u = user

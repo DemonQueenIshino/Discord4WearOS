@@ -71,7 +71,11 @@ fun EmojiStickerScreen(
     }
 
     ScreenScaffold(scrollState = listState) {
-        ScalingLazyColumn(state = listState) {
+        ScalingLazyColumn(
+            state = listState,
+            modifier = Modifier.fillMaxSize(),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
             item {
                 Text(
                     if (reactMode) "React" else if (tab == 0) "Emojis" else "Stickers",

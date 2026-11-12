@@ -371,7 +371,11 @@ fun ThreadScreen(
 
     Box(modifier = Modifier.fillMaxSize()) {
         ScreenScaffold(scrollState = listState) {
-        ScalingLazyColumn(state = listState, modifier = Modifier.fillMaxSize()) {
+        ScalingLazyColumn(
+            state = listState,
+            modifier = Modifier.fillMaxSize(),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
             item(key = "thread_title") {
                 Row(verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(4.dp)) {

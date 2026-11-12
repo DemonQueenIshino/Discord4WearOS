@@ -116,9 +116,17 @@ fun ServerChannels(
     val allChannels = remember(groups) { groups.flatMap { it.channels } }
 
     ScreenScaffold(scrollState = listState) {
-        ScalingLazyColumn(state = listState) {
+        ScalingLazyColumn(
+            state = listState,
+            modifier = Modifier.fillMaxSize(),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
             item {
-                Text(guildName, style = MaterialTheme.typography.titleMedium)
+                Text(
+                    text = guildName,
+                    style = MaterialTheme.typography.titleMedium,
+                    textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                )
             }
 
             when {
@@ -126,12 +134,17 @@ fun ServerChannels(
                 error.isNotEmpty() -> item {
                     Text(
                         error, color = MaterialTheme.colorScheme.error,
-                        style = MaterialTheme.typography.bodySmall
+                        style = MaterialTheme.typography.bodySmall,
+                        textAlign = androidx.compose.ui.text.style.TextAlign.Center
                     )
                 }
 
                 groups.isEmpty() -> item {
-                    Text("No text channels.", style = MaterialTheme.typography.bodySmall)
+                    Text(
+                        "No text channels.",
+                        style = MaterialTheme.typography.bodySmall,
+                        textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                    )
                 }
 
                 else -> {

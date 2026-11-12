@@ -568,11 +568,16 @@ fun ChatScreen(
 
     Box(modifier = Modifier.fillMaxSize()) {
         ScreenScaffold(scrollState = listState) {
-            ScalingLazyColumn(state = listState, modifier = Modifier.fillMaxSize()) {
+            ScalingLazyColumn(
+                state = listState,
+                modifier = Modifier.fillMaxSize(),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
                 item(key = "channel_title") {
                     Text(
                         "#$channelName",
-                        style = MaterialTheme.typography.titleMedium
+                        style = MaterialTheme.typography.titleMedium,
+                        textAlign = TextAlign.Center
                     )
                 }
 
