@@ -100,7 +100,7 @@ fun QrLoginScreen(onSetupComplete: () -> Unit) {
                             CircularProgressIndicator(modifier = Modifier.size(28.dp))
                         }
                         Text(
-                            "Scan with Discord app to log in",
+                            "Scan with the Discord mobile app to log in",
                             style = MaterialTheme.typography.labelSmall,
                             textAlign = TextAlign.Center,
                             maxLines = 2,
@@ -119,7 +119,7 @@ fun QrLoginScreen(onSetupComplete: () -> Unit) {
                                 .padding(5.dp)
                         )
                         Text(
-                            "Scan with Discord app to log in",
+                            "Scan with the Discord mobile app to log in",
                             style = MaterialTheme.typography.labelSmall,
                             textAlign = TextAlign.Center,
                             maxLines = 2,
