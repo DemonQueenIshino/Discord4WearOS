@@ -85,44 +85,44 @@ fun QrLoginScreen(onSetupComplete: () -> Unit) {
             when (val s = state) {
                 is RemoteAuthState.Connecting -> {
                     item {
-                        Text(
-                            "Scan with Discord app to log in",
-                            style = MaterialTheme.typography.labelMedium,
-                            textAlign = TextAlign.Center,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(horizontal = 12.dp, vertical = 4.dp)
-                        )
-                    }
-                    item {
                         Box(
-                            modifier = Modifier.size(130.dp),
+                            modifier = Modifier.size(96.dp),
                             contentAlignment = Alignment.Center
                         ) {
                             CircularProgressIndicator(modifier = Modifier.size(28.dp))
                         }
                     }
+                    item {
+                        Text(
+                            "Scan with Discord app to log in",
+                            style = MaterialTheme.typography.labelSmall,
+                            textAlign = TextAlign.Center,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 16.dp, vertical = 6.dp)
+                        )
+                    }
                 }
 
                 is RemoteAuthState.WaitingForScan -> {
                     item {
-                        Text(
-                            "Scan with Discord app to log in",
-                            style = MaterialTheme.typography.labelMedium,
-                            textAlign = TextAlign.Center,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(horizontal = 12.dp, vertical = 4.dp)
-                        )
-                    }
-                    item {
                         QrCodeImage(
                             content = "https://discord.com/ra/${s.fingerprint}",
                             modifier = Modifier
-                                .size(130.dp)
+                                .size(96.dp)
                                 .clip(RoundedCornerShape(8.dp))
                                 .background(Color.White)
                                 .padding(6.dp)
+                        )
+                    }
+                    item {
+                        Text(
+                            "Scan with Discord app to log in",
+                            style = MaterialTheme.typography.labelSmall,
+                            textAlign = TextAlign.Center,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 16.dp, vertical = 6.dp)
                         )
                     }
                 }
