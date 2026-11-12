@@ -61,6 +61,12 @@ fun QrLoginScreen(onSetupComplete: () -> Unit) {
     }
 
     LaunchedEffect(Unit) {
+        val existingToken = SetupPreferences.getToken(context)
+        if (existingToken != null) {
+            context.discordApp.initRepository(existingToken)
+            onSetupComplete()
+            return@LaunchedEffect
+        }
         startQrSession()
     }
 
