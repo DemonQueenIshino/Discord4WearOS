@@ -1,6 +1,11 @@
 package com.zaffox.discordwear
 
+import android.content.Intent
+import android.net.Uri
+import android.os.Build
 import android.os.Bundle
+import android.os.Environment
+import android.provider.Settings
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.wear.compose.material3.AppScaffold
@@ -35,13 +40,37 @@ import androidx.compose.ui.unit.dp
 
 class MainActivity : ComponentActivity() {
     var activeChannelId: String? = null
+    private var hasPromptedStoragePermission = false
+    private var isLoggedInState by mutableStateOf(false)
+
+    private fun checkAndRequestStoragePermission() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R && !Environment.isExternalStorageManager()) {
+            if (!hasPromptedStoragePermission) {
+                hasPromptedStoragePermission = true
+                val pkgUri = Uri.parse("package:$packageName")
+                val launchedPkgIntent = runCatching {
+                    startActivity(
+                        Intent(Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION, pkgUri)
+                    )
+                }.isSuccess
+                if (!launchedPkgIntent) {
+                    runCatching {
+                        startActivity(Intent(Settings.ACTION_MANAGE_ALL_FILES_ACCESS_PERMISSION))
+                    }
+                }
+            }
+        }
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
+        checkAndRequestStoragePermission()
+
         val token = SetupPreferences.getToken(this)
         if (token != null) {
             discordApp.initRepository(token)
+            isLoggedInState = true
         }
 
         setContent {
@@ -55,15 +84,25 @@ class MainActivity : ComponentActivity() {
                     if (isTokenInvalid) {
                         SetupPreferences.clearToken(this@MainActivity)
                         discordApp.clearRepository()
+                        isLoggedInState = false
                         showInvalidTokenPopup = true
                     }
                 }
 
                 AppScaffold(timeText = { TimeText() }) {
                     val navController = rememberSwipeDismissableNavController()
+
+                    androidx.compose.runtime.LaunchedEffect(isLoggedInState) {
+                        if (isLoggedInState && navController.currentDestination?.route == "Welcome") {
+                            navController.navigate("home") {
+                                popUpTo(0) { inclusive = true }
+                            }
+                        }
+                    }
+
                     SwipeDismissableNavHost(
                         navController = navController,
-                        startDestination = if (token != null) "home" else "Welcome"
+                        startDestination = if (isLoggedInState) "home" else "Welcome"
                     ) {
 
                         composable("home") {
@@ -81,6 +120,7 @@ class MainActivity : ComponentActivity() {
                         composable("Welcome") {
                             QrLoginScreen(
                                 onSetupComplete = {
+                                    isLoggedInState = true
                                     navController.navigate("home") {
                                         popUpTo(0) { inclusive = true }
                                     }
@@ -91,6 +131,7 @@ class MainActivity : ComponentActivity() {
                         composable("settings") {
                             SettingsScreen(
                                 onLogOut = {
+                                    isLoggedInState = false
                                     navController.navigate("Welcome") {
                                         popUpTo(0) { inclusive = true }
                                     }
@@ -247,6 +288,13 @@ class MainActivity : ComponentActivity() {
 
     override fun onResume() {
         super.onResume()
+        if (!isLoggedInState) {
+            val token = SetupPreferences.getToken(this)
+            if (token != null) {
+                discordApp.initRepository(token)
+                isLoggedInState = true
+            }
+        }
         discordApp.repository?.refreshOnResume(activeChannelId)
     }
 }
