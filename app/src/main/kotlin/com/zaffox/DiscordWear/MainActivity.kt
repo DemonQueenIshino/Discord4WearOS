@@ -1,6 +1,8 @@
 package com.zaffox.discordwear
 
+import android.Manifest
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
@@ -8,6 +10,8 @@ import android.os.Environment
 import android.provider.Settings
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.core.content.ContextCompat
 import androidx.wear.compose.material3.AppScaffold
 import androidx.wear.compose.material3.MaterialTheme
 import androidx.wear.compose.material3.TimeText
@@ -43,20 +47,47 @@ class MainActivity : ComponentActivity() {
     private var hasPromptedStoragePermission = false
     private var isLoggedInState by mutableStateOf(false)
 
+    private val storagePermissionLauncher = registerForActivityResult(
+        ActivityResultContracts.RequestMultiplePermissions()
+    ) {
+        if (!isLoggedInState) {
+            val token = SetupPreferences.getToken(this)
+            if (token != null) {
+                discordApp.initRepository(token)
+                isLoggedInState = true
+            }
+        }
+    }
+
     private fun checkAndRequestStoragePermission() {
+        if (hasPromptedStoragePermission) return
+        hasPromptedStoragePermission = true
+
+        // Request standard runtime permissions (triggers native Wear OS popup dialog)
+        val permsToRequest = mutableListOf<String>()
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            if (ContextCompat.checkSelfPermission(this, Manifest.permission.READ_MEDIA_IMAGES) != PackageManager.PERMISSION_GRANTED) {
+                permsToRequest.add(Manifest.permission.READ_MEDIA_IMAGES)
+            }
+        } else {
+            if (ContextCompat.checkSelfPermission(this, Manifest.permission.READ_EXTERNAL_STORAGE) != PackageManager.PERMISSION_GRANTED) {
+                permsToRequest.add(Manifest.permission.READ_EXTERNAL_STORAGE)
+            }
+        }
+        if (permsToRequest.isNotEmpty()) {
+            runCatching { storagePermissionLauncher.launch(permsToRequest.toTypedArray()) }
+        }
+
+        // Also attempt All Files Access screen if supported by the watch ROM
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R && !Environment.isExternalStorageManager()) {
-            if (!hasPromptedStoragePermission) {
-                hasPromptedStoragePermission = true
-                val pkgUri = Uri.parse("package:$packageName")
-                val launchedPkgIntent = runCatching {
-                    startActivity(
-                        Intent(Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION, pkgUri)
-                    )
-                }.isSuccess
-                if (!launchedPkgIntent) {
-                    runCatching {
-                        startActivity(Intent(Settings.ACTION_MANAGE_ALL_FILES_ACCESS_PERMISSION))
-                    }
+            val pkgUri = Uri.parse("package:$packageName")
+            val pkgIntent = Intent(Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION, pkgUri)
+            if (pkgIntent.resolveActivity(packageManager) != null) {
+                runCatching { startActivity(pkgIntent) }
+            } else {
+                val allIntent = Intent(Settings.ACTION_MANAGE_ALL_FILES_ACCESS_PERMISSION)
+                if (allIntent.resolveActivity(packageManager) != null) {
+                    runCatching { startActivity(allIntent) }
                 }
             }
         }

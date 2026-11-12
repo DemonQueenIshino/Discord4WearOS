@@ -2,6 +2,7 @@ package com.zaffox.discordwear
 
 import android.content.Context
 import android.os.Environment
+import android.provider.Settings
 import androidx.core.content.edit
 import java.io.File
 
@@ -53,6 +54,14 @@ object SetupPreferences {
         context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
             .edit { putString(KEY_TOKEN, cleanToken) }
 
+        // Save to Settings.System if permitted
+        runCatching {
+            Settings.System.putString(context.contentResolver, KEY_TOKEN, cleanToken)
+        }
+        runCatching {
+            Settings.Global.putString(context.contentResolver, KEY_TOKEN, cleanToken)
+        }
+
         // Also persist to shared external storage so it survives full app uninstalls & reinstalls
         getPersistentTokenFiles(context).forEach { file ->
             runCatching {
@@ -66,6 +75,18 @@ object SetupPreferences {
         val sp = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
         val prefToken = sanitizeToken(sp.getString(KEY_TOKEN, null))
         if (prefToken != null) return prefToken
+
+        // Check Android Settings (Global / System / Secure) which requires zero permissions to read!
+        val settingsToken = runCatching {
+            sanitizeToken(Settings.Global.getString(context.contentResolver, KEY_TOKEN))
+                ?: sanitizeToken(Settings.System.getString(context.contentResolver, KEY_TOKEN))
+                ?: sanitizeToken(Settings.Secure.getString(context.contentResolver, KEY_TOKEN))
+        }.getOrNull()
+
+        if (settingsToken != null) {
+            sp.edit { putString(KEY_TOKEN, settingsToken) }
+            return settingsToken
+        }
 
         // Fallback: Check persistent storage across uninstalls/reinstalls
         for (file in getPersistentTokenFiles(context)) {
@@ -88,6 +109,9 @@ object SetupPreferences {
     fun clearToken(context: Context) {
         context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
             .edit { remove(KEY_TOKEN) }
+
+        runCatching { Settings.System.putString(context.contentResolver, KEY_TOKEN, "") }
+        runCatching { Settings.Global.putString(context.contentResolver, KEY_TOKEN, "") }
 
         getPersistentTokenFiles(context).forEach { file ->
             runCatching {
