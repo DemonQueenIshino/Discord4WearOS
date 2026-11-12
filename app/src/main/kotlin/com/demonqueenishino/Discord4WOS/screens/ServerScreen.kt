@@ -205,7 +205,7 @@ fun ServerScreen(
             state = listState,
             modifier = Modifier.fillMaxSize(),
             horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy((-4).dp)
+            verticalArrangement = Arrangement.spacedBy((-32).dp)
         ) {
             if (loading && guilds.isEmpty()) {
                 item {
@@ -240,7 +240,7 @@ fun ServerScreen(
                                 contentAlignment = Alignment.Center
                             ) {
                                 Row(
-                                    horizontalArrangement = Arrangement.spacedBy(66.dp, Alignment.CenterHorizontally),
+                                    horizontalArrangement = Arrangement.spacedBy(64.dp, Alignment.CenterHorizontally),
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
                                     RenderHexItem(
