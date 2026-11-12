@@ -15,9 +15,8 @@ import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.wear.compose.foundation.lazy.ScalingLazyColumn
-import androidx.wear.compose.foundation.lazy.rememberScalingLazyListState
 import androidx.wear.compose.material3.*
 import coil.compose.AsyncImage
 import com.google.zxing.BarcodeFormat
@@ -33,8 +32,6 @@ import kotlinx.coroutines.launch
 @Composable
 fun QrLoginScreen(onSetupComplete: () -> Unit) {
     val context = LocalContext.current
-    val listState = rememberScalingLazyListState()
-
     val scope = rememberCoroutineScope()
     var state by remember { mutableStateOf<RemoteAuthState>(RemoteAuthState.Connecting) }
     var client by remember { mutableStateOf<RemoteAuthClient?>(null) }
@@ -76,66 +73,56 @@ fun QrLoginScreen(onSetupComplete: () -> Unit) {
         }
     }
 
-    ScreenScaffold(scrollState = listState) {
-        ScalingLazyColumn(
-            state = listState,
-            horizontalAlignment = Alignment.CenterHorizontally,
-            modifier = Modifier.fillMaxSize()
+    ScreenScaffold {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(top = 20.dp, bottom = 14.dp, start = 16.dp, end = 16.dp),
+            contentAlignment = Alignment.Center
         ) {
-            when (val s = state) {
-                is RemoteAuthState.Connecting -> {
-                    item {
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(6.dp, Alignment.CenterVertically),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                when (val s = state) {
+                    is RemoteAuthState.Connecting -> {
                         Box(
-                            modifier = Modifier.size(96.dp),
+                            modifier = Modifier.size(92.dp),
                             contentAlignment = Alignment.Center
                         ) {
                             CircularProgressIndicator(modifier = Modifier.size(28.dp))
                         }
-                    }
-                    item {
                         Text(
                             "Scan with Discord app to log in",
                             style = MaterialTheme.typography.labelSmall,
                             textAlign = TextAlign.Center,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(horizontal = 16.dp, vertical = 6.dp)
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.fillMaxWidth()
                         )
                     }
-                }
 
-                is RemoteAuthState.WaitingForScan -> {
-                    item {
+                    is RemoteAuthState.WaitingForScan -> {
                         QrCodeImage(
                             content = "https://discord.com/ra/${s.fingerprint}",
                             modifier = Modifier
-                                .size(96.dp)
+                                .size(92.dp)
                                 .clip(RoundedCornerShape(8.dp))
                                 .background(Color.White)
-                                .padding(6.dp)
+                                .padding(5.dp)
                         )
-                    }
-                    item {
                         Text(
                             "Scan with Discord app to log in",
                             style = MaterialTheme.typography.labelSmall,
                             textAlign = TextAlign.Center,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(horizontal = 16.dp, vertical = 6.dp)
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.fillMaxWidth()
                         )
                     }
-                }
 
-                is RemoteAuthState.UserScanned -> {
-                    item {
-                        Text(
-                            "Confirm on your phone",
-                            style = MaterialTheme.typography.titleSmall,
-                            textAlign = TextAlign.Center
-                        )
-                    }
-                    item {
+                    is RemoteAuthState.UserScanned -> {
                         val avatarUrl = if (s.avatarHash != "0")
                             "https://cdn.discordapp.com/avatars/${s.userId}/${s.avatarHash}.png?size=80"
                         else null
@@ -145,100 +132,90 @@ fun QrLoginScreen(onSetupComplete: () -> Unit) {
                                 contentDescription = "Avatar",
                                 contentScale = ContentScale.Crop,
                                 modifier = Modifier
-                                    .size(48.dp)
+                                    .size(40.dp)
                                     .clip(CircleShape)
                             )
                         } else {
                             Box(
                                 modifier = Modifier
-                                    .size(48.dp)
+                                    .size(40.dp)
                                     .clip(CircleShape)
                                     .background(MaterialTheme.colorScheme.primary),
                                 contentAlignment = Alignment.Center
                             ) {
                                 Text(
                                     s.username.take(1).uppercase(),
-                                    style = MaterialTheme.typography.titleMedium,
+                                    style = MaterialTheme.typography.titleSmall,
                                     color = MaterialTheme.colorScheme.onPrimary
                                 )
                             }
                         }
-                    }
-                    item {
                         Text(
                             s.username,
-                            style = MaterialTheme.typography.bodyMedium,
+                            style = MaterialTheme.typography.bodySmall,
                             textAlign = TextAlign.Center,
-                            color = MaterialTheme.colorScheme.primary
+                            color = MaterialTheme.colorScheme.primary,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
                         )
+                        Text(
+                            "Confirm on your phone",
+                            style = MaterialTheme.typography.labelSmall,
+                            textAlign = TextAlign.Center
+                        )
+                        CircularProgressIndicator(modifier = Modifier.size(20.dp))
                     }
-                    item { CircularProgressIndicator(modifier = Modifier.size(24.dp)) }
-                }
 
-                is RemoteAuthState.CaptchaRequired -> {
-                    item {
+                    is RemoteAuthState.CaptchaRequired -> {
                         Text(
                             "Captcha Required",
                             style = MaterialTheme.typography.titleSmall,
                             color = MaterialTheme.colorScheme.error,
                             textAlign = TextAlign.Center
                         )
-                    }
-                    item {
                         Text(
-                            "Check if a VPN/Proxy is enabled and try again.",
+                            "Check VPN/Proxy and try again.",
                             style = MaterialTheme.typography.labelSmall,
                             textAlign = TextAlign.Center,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(horizontal = 8.dp)
+                            maxLines = 2
                         )
-                    }
-                    item {
                         Button(
                             onClick = { startQrSession() },
                             modifier = Modifier
-                                .fillMaxWidth(0.7f)
+                                .fillMaxWidth(0.65f)
                                 .height(32.dp),
                             colors = ButtonDefaults.filledTonalButtonColors()
                         ) { Text("Retry") }
                     }
-                }
 
-                is RemoteAuthState.Canceled -> {
-                    item {
+                    is RemoteAuthState.Canceled -> {
                         Text(
                             "Login Canceled",
                             style = MaterialTheme.typography.titleSmall,
                             textAlign = TextAlign.Center
                         )
-                    }
-                    item {
                         Button(
                             onClick = { startQrSession() },
                             modifier = Modifier
-                                .fillMaxWidth(0.7f)
+                                .fillMaxWidth(0.65f)
                                 .height(32.dp),
                             colors = ButtonDefaults.filledTonalButtonColors()
                         ) { Text("Retry") }
                     }
-                }
 
-                is RemoteAuthState.Error -> {
-                    item {
+                    is RemoteAuthState.Error -> {
                         Text(
                             s.message,
-                            style = MaterialTheme.typography.bodySmall,
+                            style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.error,
                             textAlign = TextAlign.Center,
-                            modifier = Modifier.padding(horizontal = 8.dp)
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis
                         )
-                    }
-                    item {
                         Button(
                             onClick = { startQrSession() },
                             modifier = Modifier
-                                .fillMaxWidth(0.7f)
+                                .fillMaxWidth(0.65f)
                                 .height(32.dp),
                             colors = ButtonDefaults.filledTonalButtonColors()
                         ) { Text("Retry") }
