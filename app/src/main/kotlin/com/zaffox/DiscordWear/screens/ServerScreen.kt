@@ -13,6 +13,8 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -22,73 +24,116 @@ import androidx.wear.compose.material3.*
 import coil.ImageLoader
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
+import com.zaffox.discordwear.R
+import com.zaffox.discordwear.SetupPreferences
 import com.zaffox.discordwear.api.Guild
-import com.zaffox.discordwear.api.Ping
 import com.zaffox.discordwear.discordApp
 import kotlinx.coroutines.launch
 
 @Composable
-fun ServerScreen(onNavigateToChannels: (guildId: String, guildName: String) -> Unit) {
+fun ServerScreen(
+    onNavigateToDms: () -> Unit,
+    onNavigateToChannels: (guildId: String, guildName: String) -> Unit,
+    onNavigateToWelcome: () -> Unit,
+    onNavigateToSettings: () -> Unit
+) {
     val context = LocalContext.current
     val repo = context.discordApp.repository
     val listState = rememberScalingLazyListState()
     val scope = rememberCoroutineScope()
     val imageLoader = remember { ImageLoader.Builder(context).build() }
 
-    val guilds by (repo?.guilds ?: return).collectAsState()
-    val pings by repo.pings.collectAsState()
-    val readState by repo.readState.collectAsState()
-    val serverPings = remember(pings) { pings.filter { it.guildName != null } }
-
-    // Map guildId -> total mention count, using channelGuildCache for attribution
-    val channelGuilds = remember(readState) { repo.getChannelGuilds() }
-    val guildMentionCounts = remember(readState, channelGuilds) {
-        val counts = mutableMapOf<String, Int>()
-        readState.forEach { (channelId, state) ->
-            if (state.mentionCount > 0) {
-                val guildId = channelGuilds[channelId] ?: return@forEach
-                counts[guildId] = (counts[guildId] ?: 0) + state.mentionCount
-            }
+    LaunchedEffect(Unit) {
+        if (!SetupPreferences.isSetupComplete(context)) {
+            onNavigateToWelcome()
         }
-        counts
     }
+
+    if (repo == null) return
+
+    val guilds by repo.guilds.collectAsState()
+    val dmChannels by repo.dmChannels.collectAsState()
+    val readState by repo.readState.collectAsState()
+    val channelGuilds by repo.channelGuilds.collectAsState()
+    val showBadges = remember { SetupPreferences.getShowMentionBadges(context) }
+
+    val dmIds = remember(dmChannels) { dmChannels.map { it.id }.toSet() }
+    val dmMentionCount = remember(readState, dmIds, showBadges) {
+        if (!showBadges) 0
+        else readState.entries.filter { it.key in dmIds }.sumOf { it.value.mentionCount }
+    }
+
+    // Map guildId -> total mention count, using channelGuilds for attribution
+    val guildMentionCounts = remember(readState, channelGuilds, showBadges) {
+        if (!showBadges) emptyMap()
+        else {
+            val counts = mutableMapOf<String, Int>()
+            readState.forEach { (channelId, state) ->
+                if (state.mentionCount > 0) {
+                    val guildId = channelGuilds[channelId] ?: return@forEach
+                    counts[guildId] = (counts[guildId] ?: 0) + state.mentionCount
+                }
+            }
+            counts
+        }
+    }
+
     var loading by remember { mutableStateOf(guilds.isEmpty()) }
 
     LaunchedEffect(Unit) {
         scope.launch {
-            if (guilds.isEmpty()) repo.refreshGuilds()
-            else scope.launch { repo.refreshGuilds() }
+            repo.refreshGuilds()
             loading = false
         }
     }
 
     ScreenScaffold(scrollState = listState) {
         ScalingLazyColumn(state = listState) {
-            item { Text("Servers", style = MaterialTheme.typography.titleMedium) }
+            item {
+                Text(
+                    text = "Discord",
+                    style = MaterialTheme.typography.titleMedium
+                )
+            }
 
-            if (serverPings.isNotEmpty()) {
-                item {
-                    Text(
-                        text = "@  Mentions",
-                        style = MaterialTheme.typography.labelMedium.copy(fontWeight = androidx.compose.ui.text.font.FontWeight.Bold),
-                        modifier = Modifier.padding(top = 4.dp, bottom = 2.dp)
+            // "First server" entry: Direct Messages button
+            item {
+                DirectMessagesEntryButton(
+                    mentionCount = dmMentionCount,
+                    onClick = onNavigateToDms
+                )
+            }
+
+            // Subtle divider between Direct Messages and the server list (like desktop/mobile Discord)
+            item {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 2.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .width(48.dp)
+                            .height(2.dp)
+                            .background(
+                                MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.35f),
+                                RoundedCornerShape(1.dp)
+                            )
                     )
-                }
-                items(serverPings.size) { index ->
-                    val ping = serverPings[index]
-                    PingCard(ping = ping, onClick = {
-                        onNavigateToChannels(
-                            ping.message.guildId ?: return@PingCard,
-                            ping.guildName ?: return@PingCard
-                        )
-                    })
                 }
             }
 
             if (loading) {
                 item { CircularProgressIndicator() }
             } else if (guilds.isEmpty()) {
-                item { Text("No servers found.", style = MaterialTheme.typography.bodySmall) }
+                item {
+                    Text(
+                        "No servers found.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
             } else {
                 items(guilds.size) { index ->
                     val guild = guilds[index]
@@ -99,6 +144,90 @@ fun ServerScreen(onNavigateToChannels: (guildId: String, guildName: String) -> U
                         onClick = { onNavigateToChannels(guild.id, guild.name) }
                     )
                 }
+            }
+
+            item {
+                Spacer(modifier = Modifier.height(4.dp))
+            }
+
+            item {
+                FilledIconButton(
+                    onClick = onNavigateToSettings,
+                    modifier = Modifier
+                        .height(40.dp)
+                        .width(40.dp)
+                ) {
+                    Icon(
+                        painter = painterResource(id = R.drawable.settings),
+                        contentDescription = "Settings"
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun DirectMessagesEntryButton(
+    mentionCount: Int = 0,
+    onClick: () -> Unit
+) {
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(52.dp)
+            .clip(RoundedCornerShape(26.dp))
+            .background(MaterialTheme.colorScheme.surfaceContainer)
+            .clickable(onClick = onClick)
+    ) {
+        Row(
+            modifier = Modifier
+                .matchParentSize()
+                .padding(horizontal = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(32.dp)
+                    .background(Color(0xFF5865F2), CircleShape),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    painter = painterResource(id = R.drawable.ic_discord_dm),
+                    contentDescription = "Direct Messages",
+                    tint = Color.White,
+                    modifier = Modifier.size(18.dp)
+                )
+            }
+
+            Text(
+                text = "Direct Messages",
+                style = MaterialTheme.typography.bodySmall,
+                fontWeight = FontWeight.SemiBold,
+                color = MaterialTheme.colorScheme.onSurface,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f)
+            )
+        }
+
+        if (mentionCount > 0) {
+            Box(
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .padding(top = 4.dp, end = 6.dp)
+                    .defaultMinSize(minWidth = 16.dp, minHeight = 16.dp)
+                    .background(Color(0xFFF23F43), CircleShape)
+                    .padding(horizontal = 3.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = if (mentionCount > 99) "99+" else mentionCount.toString(),
+                    color = Color.White,
+                    fontSize = 8.sp,
+                    fontWeight = FontWeight.Bold
+                )
             }
         }
     }
@@ -204,34 +333,9 @@ private fun ServerButton(
                     text = if (mentionCount > 99) "99+" else mentionCount.toString(),
                     color = Color.White,
                     fontSize = 8.sp,
-                    fontWeight = androidx.compose.ui.text.font.FontWeight.Bold
+                    fontWeight = FontWeight.Bold
                 )
             }
         }
-    }
-}
-
-@Composable
-private fun PingCard(ping: Ping, onClick: () -> Unit) {
-    TitleCard(
-        modifier = Modifier.fillMaxWidth(),
-        onClick = onClick,
-        title = {
-            Text(
-                text = "${ping.guildName} • #${ping.channelName}",
-                style = MaterialTheme.typography.titleSmall
-            )
-        },
-        time = {
-            Text(
-                text = ping.message.author.displayName,
-                style = MaterialTheme.typography.bodyExtraSmall
-            )
-        }
-    ) {
-        Text(
-            text = ping.message.content.take(80),
-            style = MaterialTheme.typography.bodySmall
-        )
     }
 }

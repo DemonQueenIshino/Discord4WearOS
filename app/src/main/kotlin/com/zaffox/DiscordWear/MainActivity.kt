@@ -67,15 +67,14 @@ class MainActivity : ComponentActivity() {
                     ) {
 
                         composable("home") {
-                            HomeScreen(
+                            activeChannelId = null
+                            ServerScreen(
                                 onNavigateToDms = { navController.navigate("DMs") },
-                                onNavigateToServers = { navController.navigate("servers") },
+                                onNavigateToChannels = { gId, gName ->
+                                    navController.navigate("ServerChannels/$gId/$gName")
+                                },
                                 onNavigateToWelcome = { navController.navigate("Welcome") },
-                                onNavigateToSettings = { navController.navigate("settings") },
-                                onNavigateToChat = { chId, chName, guildId ->
-                                    val guildSeg = guildId ?: "dm"
-                                    navController.navigate("chatscreen/$chId/$chName/$guildSeg")
-                                }
+                                onNavigateToSettings = { navController.navigate("settings") }
                             )
                         }
 
@@ -189,13 +188,6 @@ class MainActivity : ComponentActivity() {
                             activeChannelId = null
                             DmsScreen(onNavigateToChatScreen = { chId, chName ->
                                 navController.navigate("chatscreen/$chId/$chName/dm")
-                            })
-                        }
-
-                        composable("servers") {
-                            activeChannelId = null
-                            ServerScreen(onNavigateToChannels = { gId, gName ->
-                                navController.navigate("ServerChannels/$gId/$gName")
                             })
                         }
                     }
