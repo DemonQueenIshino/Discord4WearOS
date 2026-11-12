@@ -143,8 +143,23 @@ class MainActivity : ComponentActivity() {
                                 onNavigateToChannels = { gId, gName ->
                                     navController.navigate("ServerChannels/$gId/$gName")
                                 },
+                                onNavigateToFolder = { folderId ->
+                                    navController.navigate("FolderServers/$folderId")
+                                },
                                 onNavigateToWelcome = { navController.navigate("Welcome") },
                                 onNavigateToSettings = { navController.navigate("settings") }
+                            )
+                        }
+
+                        composable("FolderServers/{folderId}") { back ->
+                            val folderId = back.arguments?.getString("folderId") ?: return@composable
+                            activeChannelId = null
+                            FolderServersScreen(
+                                folderId = folderId,
+                                onNavigateToChannels = { gId, gName ->
+                                    navController.navigate("ServerChannels/$gId/$gName")
+                                },
+                                onBack = { navController.popBackStack() }
                             )
                         }
 

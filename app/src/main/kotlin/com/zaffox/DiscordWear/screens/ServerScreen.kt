@@ -1,20 +1,37 @@
 package com.zaffox.discordwear.screens
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.scale
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.zIndex
 import androidx.wear.compose.foundation.lazy.ScalingLazyColumn
 import androidx.wear.compose.foundation.lazy.rememberScalingLazyListState
 import androidx.wear.compose.material3.*
@@ -26,11 +43,142 @@ import com.zaffox.discordwear.SetupPreferences
 import com.zaffox.discordwear.api.Guild
 import com.zaffox.discordwear.discordApp
 import kotlinx.coroutines.launch
+import java.util.UUID
+import kotlin.math.hypot
+import kotlin.math.roundToInt
+
+sealed class ServerListEntry {
+    abstract val key: String
+
+    data class SingleServer(val guild: Guild) : ServerListEntry() {
+        override val key: String get() = "server_${guild.id}"
+    }
+
+    data class FolderEntry(
+        val folderId: String,
+        val name: String,
+        val guilds: List<Guild>
+    ) : ServerListEntry() {
+        override val key: String get() = "folder_$folderId"
+    }
+}
+
+/**
+ * In-memory runtime holder for server ordering and folders.
+ * Resets automatically when the app process restarts.
+ */
+object RuntimeServerListState {
+    val entries = mutableStateListOf<ServerListEntry>()
+    var initialized = false
+
+    fun syncWithGuilds(guilds: List<Guild>) {
+        if (guilds.isEmpty()) return
+        if (!initialized) {
+            entries.clear()
+            guilds.forEach { entries.add(ServerListEntry.SingleServer(it)) }
+            initialized = true
+        } else {
+            val guildById = guilds.associateBy { it.id }
+            val seenIds = mutableSetOf<String>()
+            val updated = mutableListOf<ServerListEntry>()
+
+            for (entry in entries) {
+                when (entry) {
+                    is ServerListEntry.SingleServer -> {
+                        val fresh = guildById[entry.guild.id]
+                        if (fresh != null) {
+                            updated.add(ServerListEntry.SingleServer(fresh))
+                            seenIds.add(fresh.id)
+                        }
+                    }
+                    is ServerListEntry.FolderEntry -> {
+                        val freshGuilds = entry.guilds.mapNotNull { g ->
+                            guildById[g.id]?.also { seenIds.add(it.id) }
+                        }
+                        if (freshGuilds.size >= 2) {
+                            updated.add(entry.copy(guilds = freshGuilds))
+                        } else if (freshGuilds.size == 1) {
+                            updated.add(ServerListEntry.SingleServer(freshGuilds.first()))
+                        }
+                    }
+                }
+            }
+
+            guilds.forEach { g ->
+                if (g.id !in seenIds) {
+                    updated.add(ServerListEntry.SingleServer(g))
+                }
+            }
+
+            entries.clear()
+            entries.addAll(updated)
+        }
+    }
+
+    fun moveEntry(fromKey: String, toIndex: Int) {
+        val fromIdx = entries.indexOfFirst { it.key == fromKey }
+        if (fromIdx == -1) return
+        val item = entries.removeAt(fromIdx)
+        val adjustedIdx = (if (toIndex > fromIdx) toIndex - 1 else toIndex).coerceIn(0, entries.size)
+        entries.add(adjustedIdx, item)
+    }
+
+    fun mergeIntoTarget(draggedKey: String, targetKey: String) {
+        if (draggedKey == targetKey) return
+        val fromIdx = entries.indexOfFirst { it.key == draggedKey }
+        val toIdx = entries.indexOfFirst { it.key == targetKey }
+        if (fromIdx == -1 || toIdx == -1) return
+
+        val dragged = entries[fromIdx]
+        val target = entries[toIdx]
+
+        // Only allow merging a single server onto another server or into an existing folder
+        if (dragged is ServerListEntry.SingleServer) {
+            when (target) {
+                is ServerListEntry.SingleServer -> {
+                    val newFolder = ServerListEntry.FolderEntry(
+                        folderId = UUID.randomUUID().toString(),
+                        name = "Folder",
+                        guilds = listOf(target.guild, dragged.guild)
+                    )
+                    entries[toIdx] = newFolder
+                    entries.removeAt(fromIdx)
+                }
+                is ServerListEntry.FolderEntry -> {
+                    if (target.guilds.none { it.id == dragged.guild.id }) {
+                        entries[toIdx] = target.copy(guilds = target.guilds + dragged.guild)
+                    }
+                    entries.removeAt(fromIdx)
+                }
+            }
+        } else if (dragged is ServerListEntry.FolderEntry && target is ServerListEntry.FolderEntry) {
+            // Merge two folders if a folder is dropped directly onto another folder
+            val combined = (target.guilds + dragged.guilds).distinctBy { it.id }
+            entries[toIdx] = target.copy(guilds = combined)
+            entries.removeAt(fromIdx)
+        } else {
+            // If folder dropped onto a single server, add that server into the folder or reorder
+            val item = entries.removeAt(fromIdx)
+            val dest = entries.indexOfFirst { it.key == targetKey }.coerceAtLeast(0)
+            entries.add(dest, item)
+        }
+    }
+}
 
 private sealed class HexItem {
-    data class DirectMessages(val mentionCount: Int) : HexItem()
-    data class Server(val guild: Guild, val mentionCount: Int) : HexItem()
-    object Settings : HexItem()
+    abstract val key: String
+
+    data class DirectMessages(val mentionCount: Int) : HexItem() {
+        override val key: String = "dms"
+    }
+
+    data class Entry(val entry: ServerListEntry, val mentionCount: Int) : HexItem() {
+        override val key: String get() = entry.key
+    }
+
+    object Settings : HexItem() {
+        override val key: String = "settings"
+    }
 }
 
 private sealed class HexRow {
@@ -38,10 +186,16 @@ private sealed class HexRow {
     data class Pair(val left: HexItem, val right: HexItem?) : HexRow()
 }
 
+private sealed class DropAction {
+    data class Merge(val targetKey: String) : DropAction()
+    data class Reorder(val targetIndex: Int, val anchorCenter: Offset, val insertAfter: Boolean) : DropAction()
+}
+
 @Composable
 fun ServerScreen(
     onNavigateToDms: () -> Unit,
     onNavigateToChannels: (guildId: String, guildName: String) -> Unit,
+    onNavigateToFolder: (folderId: String) -> Unit,
     onNavigateToWelcome: () -> Unit,
     onNavigateToSettings: () -> Unit
 ) {
@@ -49,6 +203,8 @@ fun ServerScreen(
     val repo = context.discordApp.repository
     val listState = rememberScalingLazyListState()
     val scope = rememberCoroutineScope()
+    val haptics = LocalHapticFeedback.current
+    val density = LocalDensity.current
     val imageLoader = remember { ImageLoader.Builder(context).build() }
 
     LaunchedEffect(Unit) {
@@ -64,6 +220,10 @@ fun ServerScreen(
     val readState by repo.readState.collectAsState()
     val channelGuilds by repo.channelGuilds.collectAsState()
     val showBadges = remember { SetupPreferences.getShowMentionBadges(context) }
+
+    LaunchedEffect(guilds) {
+        RuntimeServerListState.syncWithGuilds(guilds)
+    }
 
     val dmIds = remember(dmChannels) { dmChannels.map { it.id }.toSet() }
     val dmMentionCount = remember(readState, dmIds, showBadges) {
@@ -95,12 +255,18 @@ fun ServerScreen(
         }
     }
 
+    val runtimeEntries = RuntimeServerListState.entries
+
     // Build the 1 - 2 - 1 - 2 honeycomb rows starting with DMs at the top center
-    val hexRows = remember(guilds, dmMentionCount, guildMentionCounts) {
+    val hexRows = remember(runtimeEntries.toList(), dmMentionCount, guildMentionCounts) {
         val items = mutableListOf<HexItem>()
         items.add(HexItem.DirectMessages(dmMentionCount))
-        guilds.forEach { guild ->
-            items.add(HexItem.Server(guild, guildMentionCounts[guild.id] ?: 0))
+        runtimeEntries.forEach { entry ->
+            val mentions = when (entry) {
+                is ServerListEntry.SingleServer -> guildMentionCounts[entry.guild.id] ?: 0
+                is ServerListEntry.FolderEntry -> entry.guilds.sumOf { guildMentionCounts[it.id] ?: 0 }
+            }
+            items.add(HexItem.Entry(entry, mentions))
         }
         items.add(HexItem.Settings)
 
@@ -122,68 +288,288 @@ fun ServerScreen(
         rows
     }
 
-    ScreenScaffold(scrollState = listState) {
-        ScalingLazyColumn(
-            state = listState,
-            modifier = Modifier.fillMaxSize(),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy((-14).dp)
-        ) {
-            if (loading && guilds.isEmpty()) {
-                item {
-                    CircularProgressIndicator(modifier = Modifier.size(32.dp))
-                }
-            } else {
-                items(hexRows.size) { rowIndex ->
-                    when (val row = hexRows[rowIndex]) {
-                        is HexRow.Center -> {
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .height(50.dp),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                RenderHexItem(
-                                    item = row.item,
-                                    imageLoader = imageLoader,
-                                    onNavigateToDms = onNavigateToDms,
-                                    onNavigateToChannels = onNavigateToChannels,
-                                    onNavigateToSettings = onNavigateToSettings
-                                )
-                            }
-                        }
+    // Drag & Drop state
+    val itemCenters = remember { mutableStateMapOf<String, Offset>() }
+    var rootOffset by remember { mutableStateOf(Offset.Zero) }
+    var draggedEntry by remember { mutableStateOf<ServerListEntry?>(null) }
+    var dragPositionInRoot by remember { mutableStateOf(Offset.Zero) }
+    var activeDropAction by remember { mutableStateOf<DropAction?>(null) }
 
-                        is HexRow.Pair -> {
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .height(50.dp),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Row(
-                                    horizontalArrangement = Arrangement.spacedBy(66.dp, Alignment.CenterHorizontally),
-                                    verticalAlignment = Alignment.CenterVertically
+    val mergeRadiusPx = with(density) { 22.dp.toPx() }
+    val reorderRadiusPx = with(density) { 54.dp.toPx() }
+    val iconHalfSizePx = with(density) { 25.dp.toPx() }
+
+    fun evaluateDropAction(pointerRoot: Offset, currentDragged: ServerListEntry): DropAction? {
+        var closestKey: String? = null
+        var closestDist = Float.MAX_VALUE
+        var closestCenter = Offset.Zero
+
+        for ((key, center) in itemCenters) {
+            if (key == currentDragged.key) continue
+            val dist = hypot(pointerRoot.x - center.x, pointerRoot.y - center.y)
+            if (dist < closestDist) {
+                closestDist = dist
+                closestKey = key
+                closestCenter = center
+            }
+        }
+
+        val targetKey = closestKey ?: return null
+        val targetIndex = runtimeEntries.indexOfFirst { it.key == targetKey }
+        if (targetIndex == -1) return null
+
+        return when {
+            closestDist <= mergeRadiusPx && currentDragged is ServerListEntry.SingleServer -> {
+                DropAction.Merge(targetKey)
+            }
+            closestDist <= reorderRadiusPx -> {
+                val insertAfter = pointerRoot.y > closestCenter.y + 8f ||
+                    (kotlin.math.abs(pointerRoot.y - closestCenter.y) <= 8f && pointerRoot.x > closestCenter.x)
+                val insertIdx = if (insertAfter) targetIndex + 1 else targetIndex
+                DropAction.Reorder(insertIdx, closestCenter, insertAfter)
+            }
+            else -> null
+        }
+    }
+
+    ScreenScaffold(scrollState = listState) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .onGloballyPositioned { coords ->
+                    rootOffset = coords.positionInRoot()
+                }
+        ) {
+            ScalingLazyColumn(
+                state = listState,
+                userScrollEnabled = draggedEntry == null,
+                modifier = Modifier.fillMaxSize(),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy((-14).dp)
+            ) {
+                if (loading && guilds.isEmpty()) {
+                    item {
+                        CircularProgressIndicator(modifier = Modifier.size(32.dp))
+                    }
+                } else {
+                    items(hexRows.size) { rowIndex ->
+                        when (val row = hexRows[rowIndex]) {
+                            is HexRow.Center -> {
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .height(50.dp),
+                                    contentAlignment = Alignment.Center
                                 ) {
                                     RenderHexItem(
-                                        item = row.left,
+                                        item = row.item,
                                         imageLoader = imageLoader,
+                                        draggedKey = draggedEntry?.key,
+                                        mergeTargetKey = (activeDropAction as? DropAction.Merge)?.targetKey,
+                                        reorderTargetKey = (activeDropAction as? DropAction.Reorder)?.let {
+                                            runtimeEntries.getOrNull(
+                                                if (it.insertAfter) it.targetIndex - 1 else it.targetIndex
+                                            )?.key
+                                        },
+                                        onPositionedCenter = { key, center ->
+                                            itemCenters[key] = center
+                                        },
+                                        onStartDrag = { entry, initialCenter ->
+                                            haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                                            draggedEntry = entry
+                                            dragPositionInRoot = initialCenter
+                                            activeDropAction = null
+                                        },
+                                        onDragBy = { delta ->
+                                            dragPositionInRoot += delta
+                                            draggedEntry?.let { current ->
+                                                val nextAction = evaluateDropAction(dragPositionInRoot, current)
+                                                if (nextAction != activeDropAction && nextAction is DropAction.Merge) {
+                                                    haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                                }
+                                                activeDropAction = nextAction
+                                            }
+                                        },
+                                        onEndDrag = {
+                                            val current = draggedEntry
+                                            val action = activeDropAction
+                                            if (current != null && action != null) {
+                                                when (action) {
+                                                    is DropAction.Merge -> {
+                                                        RuntimeServerListState.mergeIntoTarget(current.key, action.targetKey)
+                                                    }
+                                                    is DropAction.Reorder -> {
+                                                        RuntimeServerListState.moveEntry(current.key, action.targetIndex)
+                                                    }
+                                                }
+                                            }
+                                            draggedEntry = null
+                                            activeDropAction = null
+                                        },
                                         onNavigateToDms = onNavigateToDms,
                                         onNavigateToChannels = onNavigateToChannels,
+                                        onNavigateToFolder = onNavigateToFolder,
                                         onNavigateToSettings = onNavigateToSettings
                                     )
-                                    if (row.right != null) {
+                                }
+                            }
+
+                            is HexRow.Pair -> {
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .height(50.dp),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Row(
+                                        horizontalArrangement = Arrangement.spacedBy(66.dp, Alignment.CenterHorizontally),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        val reorderHighlightKey = (activeDropAction as? DropAction.Reorder)?.let {
+                                            runtimeEntries.getOrNull(
+                                                if (it.insertAfter) it.targetIndex - 1 else it.targetIndex
+                                            )?.key
+                                        }
                                         RenderHexItem(
-                                            item = row.right,
+                                            item = row.left,
                                             imageLoader = imageLoader,
+                                            draggedKey = draggedEntry?.key,
+                                            mergeTargetKey = (activeDropAction as? DropAction.Merge)?.targetKey,
+                                            reorderTargetKey = reorderHighlightKey,
+                                            onPositionedCenter = { key, center ->
+                                                itemCenters[key] = center
+                                            },
+                                            onStartDrag = { entry, initialCenter ->
+                                                haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                                                draggedEntry = entry
+                                                dragPositionInRoot = initialCenter
+                                                activeDropAction = null
+                                            },
+                                            onDragBy = { delta ->
+                                                dragPositionInRoot += delta
+                                                draggedEntry?.let { current ->
+                                                    val nextAction = evaluateDropAction(dragPositionInRoot, current)
+                                                    if (nextAction != activeDropAction && nextAction is DropAction.Merge) {
+                                                        haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                                    }
+                                                    activeDropAction = nextAction
+                                                }
+                                            },
+                                            onEndDrag = {
+                                                val current = draggedEntry
+                                                val action = activeDropAction
+                                                if (current != null && action != null) {
+                                                    when (action) {
+                                                        is DropAction.Merge -> {
+                                                            RuntimeServerListState.mergeIntoTarget(current.key, action.targetKey)
+                                                        }
+                                                        is DropAction.Reorder -> {
+                                                            RuntimeServerListState.moveEntry(current.key, action.targetIndex)
+                                                        }
+                                                    }
+                                                }
+                                                draggedEntry = null
+                                                activeDropAction = null
+                                            },
                                             onNavigateToDms = onNavigateToDms,
                                             onNavigateToChannels = onNavigateToChannels,
+                                            onNavigateToFolder = onNavigateToFolder,
                                             onNavigateToSettings = onNavigateToSettings
                                         )
-                                    } else {
-                                        Spacer(modifier = Modifier.size(50.dp))
+                                        if (row.right != null) {
+                                            RenderHexItem(
+                                                item = row.right,
+                                                imageLoader = imageLoader,
+                                                draggedKey = draggedEntry?.key,
+                                                mergeTargetKey = (activeDropAction as? DropAction.Merge)?.targetKey,
+                                                reorderTargetKey = reorderHighlightKey,
+                                                onPositionedCenter = { key, center ->
+                                                    itemCenters[key] = center
+                                                },
+                                                onStartDrag = { entry, initialCenter ->
+                                                    haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                                                    draggedEntry = entry
+                                                    dragPositionInRoot = initialCenter
+                                                    activeDropAction = null
+                                                },
+                                                onDragBy = { delta ->
+                                                    dragPositionInRoot += delta
+                                                    draggedEntry?.let { current ->
+                                                        val nextAction = evaluateDropAction(dragPositionInRoot, current)
+                                                        if (nextAction != activeDropAction && nextAction is DropAction.Merge) {
+                                                            haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                                        }
+                                                        activeDropAction = nextAction
+                                                    }
+                                                },
+                                                onEndDrag = {
+                                                    val current = draggedEntry
+                                                    val action = activeDropAction
+                                                    if (current != null && action != null) {
+                                                        when (action) {
+                                                            is DropAction.Merge -> {
+                                                                RuntimeServerListState.mergeIntoTarget(current.key, action.targetKey)
+                                                            }
+                                                            is DropAction.Reorder -> {
+                                                                RuntimeServerListState.moveEntry(current.key, action.targetIndex)
+                                                            }
+                                                        }
+                                                    }
+                                                    draggedEntry = null
+                                                    activeDropAction = null
+                                                },
+                                                onNavigateToDms = onNavigateToDms,
+                                                onNavigateToChannels = onNavigateToChannels,
+                                                onNavigateToFolder = onNavigateToFolder,
+                                                onNavigateToSettings = onNavigateToSettings
+                                            )
+                                        } else {
+                                            Spacer(modifier = Modifier.size(50.dp))
+                                        }
                                     }
                                 }
                             }
+                        }
+                    }
+                }
+            }
+
+            // Floating dragged item overlay
+            val activeDragged = draggedEntry
+            if (activeDragged != null) {
+                val localPos = dragPositionInRoot - rootOffset
+                Box(
+                    modifier = Modifier
+                        .offset {
+                            IntOffset(
+                                x = (localPos.x - iconHalfSizePx).roundToInt(),
+                                y = (localPos.y - iconHalfSizePx).roundToInt()
+                            )
+                        }
+                        .zIndex(10f)
+                        .scale(1.12f)
+                        .alpha(0.92f)
+                ) {
+                    when (activeDragged) {
+                        is ServerListEntry.SingleServer -> {
+                            CircularServerButton(
+                                guild = activeDragged.guild,
+                                imageLoader = imageLoader,
+                                mentionCount = 0,
+                                isMergeTarget = false,
+                                isReorderTarget = false,
+                                onClick = {}
+                            )
+                        }
+                        is ServerListEntry.FolderEntry -> {
+                            CircularFolderButton(
+                                folder = activeDragged,
+                                imageLoader = imageLoader,
+                                mentionCount = 0,
+                                isMergeTarget = false,
+                                isReorderTarget = false,
+                                onClick = {}
+                            )
                         }
                     }
                 }
@@ -196,8 +582,16 @@ fun ServerScreen(
 private fun RenderHexItem(
     item: HexItem,
     imageLoader: ImageLoader,
+    draggedKey: String?,
+    mergeTargetKey: String?,
+    reorderTargetKey: String?,
+    onPositionedCenter: (key: String, center: Offset) -> Unit,
+    onStartDrag: (entry: ServerListEntry, initialCenter: Offset) -> Unit,
+    onDragBy: (delta: Offset) -> Unit,
+    onEndDrag: () -> Unit,
     onNavigateToDms: () -> Unit,
     onNavigateToChannels: (guildId: String, guildName: String) -> Unit,
+    onNavigateToFolder: (folderId: String) -> Unit,
     onNavigateToSettings: () -> Unit
 ) {
     when (item) {
@@ -207,13 +601,68 @@ private fun RenderHexItem(
                 onClick = onNavigateToDms
             )
         }
-        is HexItem.Server -> {
-            CircularServerButton(
-                guild = item.guild,
-                imageLoader = imageLoader,
-                mentionCount = item.mentionCount,
-                onClick = { onNavigateToChannels(item.guild.id, item.guild.name) }
-            )
+        is HexItem.Entry -> {
+            val entry = item.entry
+            val isBeingDragged = draggedKey == entry.key
+            val isMergeTarget = mergeTargetKey == entry.key
+            val isReorderTarget = reorderTargetKey == entry.key && !isMergeTarget
+            var latestCenter by remember { mutableStateOf(Offset.Zero) }
+
+            Box(
+                modifier = Modifier
+                    .size(50.dp)
+                    .alpha(if (isBeingDragged) 0.28f else 1f)
+                    .scale(if (isMergeTarget) 1.15f else 1f)
+                    .onGloballyPositioned { coords ->
+                        val pos = coords.positionInRoot()
+                        val center = Offset(
+                            pos.x + coords.size.width / 2f,
+                            pos.y + coords.size.height / 2f
+                        )
+                        latestCenter = center
+                        onPositionedCenter(entry.key, center)
+                    }
+                    .pointerInput(entry.key) {
+                        detectDragGesturesAfterLongPress(
+                            onDragStart = {
+                                onStartDrag(entry, latestCenter)
+                            },
+                            onDrag = { change, dragAmount ->
+                                change.consume()
+                                onDragBy(dragAmount)
+                            },
+                            onDragEnd = {
+                                onEndDrag()
+                            },
+                            onDragCancel = {
+                                onEndDrag()
+                            }
+                        )
+                    }
+            ) {
+                when (entry) {
+                    is ServerListEntry.SingleServer -> {
+                        CircularServerButton(
+                            guild = entry.guild,
+                            imageLoader = imageLoader,
+                            mentionCount = item.mentionCount,
+                            isMergeTarget = isMergeTarget,
+                            isReorderTarget = isReorderTarget,
+                            onClick = { onNavigateToChannels(entry.guild.id, entry.guild.name) }
+                        )
+                    }
+                    is ServerListEntry.FolderEntry -> {
+                        CircularFolderButton(
+                            folder = entry,
+                            imageLoader = imageLoader,
+                            mentionCount = item.mentionCount,
+                            isMergeTarget = isMergeTarget,
+                            isReorderTarget = isReorderTarget,
+                            onClick = { onNavigateToFolder(entry.folderId) }
+                        )
+                    }
+                }
+            }
         }
         is HexItem.Settings -> {
             CircularSettingsButton(onClick = onNavigateToSettings)
@@ -247,21 +696,7 @@ private fun CircularDmButton(
         }
 
         if (mentionCount > 0) {
-            Box(
-                modifier = Modifier
-                    .align(Alignment.TopEnd)
-                    .defaultMinSize(minWidth = 16.dp, minHeight = 16.dp)
-                    .background(Color(0xFFF23F43), CircleShape)
-                    .padding(horizontal = 3.dp),
-                contentAlignment = Alignment.Center
-            ) {
-                Text(
-                    text = if (mentionCount > 99) "99+" else mentionCount.toString(),
-                    color = Color.White,
-                    fontSize = 8.sp,
-                    fontWeight = FontWeight.Bold
-                )
-            }
+            MentionBadge(mentionCount = mentionCount, modifier = Modifier.align(Alignment.TopEnd))
         }
     }
 }
@@ -271,10 +706,18 @@ private fun CircularServerButton(
     guild: Guild,
     imageLoader: ImageLoader,
     mentionCount: Int = 0,
+    isMergeTarget: Boolean = false,
+    isReorderTarget: Boolean = false,
     onClick: () -> Unit
 ) {
     val context = LocalContext.current
     val iconUrl = guild.iconUrl(128)
+
+    val borderModifier = when {
+        isMergeTarget -> Modifier.border(2.5.dp, Color(0xFF5865F2), CircleShape)
+        isReorderTarget -> Modifier.border(2.dp, Color.White.copy(alpha = 0.75f), CircleShape)
+        else -> Modifier
+    }
 
     Box(
         modifier = Modifier.size(50.dp),
@@ -283,6 +726,7 @@ private fun CircularServerButton(
         Box(
             modifier = Modifier
                 .fillMaxSize()
+                .then(borderModifier)
                 .clip(CircleShape)
                 .background(Color(0xFF313338))
                 .clickable(onClick = onClick),
@@ -316,22 +760,126 @@ private fun CircularServerButton(
         }
 
         if (mentionCount > 0) {
-            Box(
-                modifier = Modifier
-                    .align(Alignment.TopEnd)
-                    .defaultMinSize(minWidth = 16.dp, minHeight = 16.dp)
-                    .background(Color(0xFFF23F43), CircleShape)
-                    .padding(horizontal = 3.dp),
-                contentAlignment = Alignment.Center
+            MentionBadge(mentionCount = mentionCount, modifier = Modifier.align(Alignment.TopEnd))
+        }
+    }
+}
+
+@Composable
+private fun CircularFolderButton(
+    folder: ServerListEntry.FolderEntry,
+    imageLoader: ImageLoader,
+    mentionCount: Int = 0,
+    isMergeTarget: Boolean = false,
+    isReorderTarget: Boolean = false,
+    onClick: () -> Unit
+) {
+    val context = LocalContext.current
+    val previewGuilds = folder.guilds.take(4)
+
+    val borderModifier = when {
+        isMergeTarget -> Modifier.border(2.5.dp, Color(0xFF5865F2), CircleShape)
+        isReorderTarget -> Modifier.border(2.dp, Color.White.copy(alpha = 0.75f), CircleShape)
+        else -> Modifier.border(1.dp, Color.White.copy(alpha = 0.14f), CircleShape)
+    }
+
+    Box(
+        modifier = Modifier.size(50.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .then(borderModifier)
+                .clip(CircleShape)
+                .background(Color(0xFF2B2D31))
+                .clickable(onClick = onClick)
+                .padding(7.dp),
+            contentAlignment = Alignment.Center
+        ) {
+            Column(
+                verticalArrangement = Arrangement.spacedBy(3.dp, Alignment.CenterVertically),
+                horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                Text(
-                    text = if (mentionCount > 99) "99+" else mentionCount.toString(),
-                    color = Color.White,
-                    fontSize = 8.sp,
-                    fontWeight = FontWeight.Bold
-                )
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(3.dp, Alignment.CenterHorizontally),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    MiniGuildAvatar(guild = previewGuilds.getOrNull(0), imageLoader = imageLoader, context = context)
+                    MiniGuildAvatar(guild = previewGuilds.getOrNull(1), imageLoader = imageLoader, context = context)
+                }
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(3.dp, Alignment.CenterHorizontally),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    MiniGuildAvatar(guild = previewGuilds.getOrNull(2), imageLoader = imageLoader, context = context)
+                    MiniGuildAvatar(guild = previewGuilds.getOrNull(3), imageLoader = imageLoader, context = context)
+                }
             }
         }
+
+        if (mentionCount > 0) {
+            MentionBadge(mentionCount = mentionCount, modifier = Modifier.align(Alignment.TopEnd))
+        }
+    }
+}
+
+@Composable
+private fun MiniGuildAvatar(
+    guild: Guild?,
+    imageLoader: ImageLoader,
+    context: android.content.Context
+) {
+    if (guild == null) {
+        Spacer(modifier = Modifier.size(15.dp))
+        return
+    }
+    val iconUrl = guild.iconUrl(64)
+    if (iconUrl != null) {
+        AsyncImage(
+            model = ImageRequest.Builder(context).data(iconUrl).crossfade(true).build(),
+            imageLoader = imageLoader,
+            contentDescription = guild.name,
+            contentScale = ContentScale.Crop,
+            modifier = Modifier
+                .size(15.dp)
+                .clip(CircleShape)
+        )
+    } else {
+        Box(
+            modifier = Modifier
+                .size(15.dp)
+                .background(Color(0xFF5865F2), CircleShape),
+            contentAlignment = Alignment.Center
+        ) {
+            Text(
+                text = guild.name.firstOrNull()?.uppercaseChar()?.toString() ?: "?",
+                color = Color.White,
+                fontSize = 7.sp,
+                fontWeight = FontWeight.Bold
+            )
+        }
+    }
+}
+
+@Composable
+private fun MentionBadge(
+    mentionCount: Int,
+    modifier: Modifier = Modifier
+) {
+    Box(
+        modifier = modifier
+            .defaultMinSize(minWidth = 16.dp, minHeight = 16.dp)
+            .background(Color(0xFFF23F43), CircleShape)
+            .padding(horizontal = 3.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        Text(
+            text = if (mentionCount > 99) "99+" else mentionCount.toString(),
+            color = Color.White,
+            fontSize = 8.sp,
+            fontWeight = FontWeight.Bold
+        )
     }
 }
 
@@ -351,5 +899,179 @@ private fun CircularSettingsButton(onClick: () -> Unit) {
             tint = MaterialTheme.colorScheme.onSurface,
             modifier = Modifier.size(24.dp)
         )
+    }
+}
+
+/**
+ * Screen displaying the servers inside a folder as a standard vertical list
+ * with icons, names, and banners.
+ */
+@Composable
+fun FolderServersScreen(
+    folderId: String,
+    onNavigateToChannels: (guildId: String, guildName: String) -> Unit,
+    onBack: () -> Unit
+) {
+    val context = LocalContext.current
+    val repo = context.discordApp.repository ?: return
+    val listState = rememberScalingLazyListState()
+    val imageLoader = remember { ImageLoader.Builder(context).build() }
+
+    val readState by repo.readState.collectAsState()
+    val channelGuilds by repo.channelGuilds.collectAsState()
+    val showBadges = remember { SetupPreferences.getShowMentionBadges(context) }
+
+    val guildMentionCounts = remember(readState, channelGuilds, showBadges) {
+        if (!showBadges) emptyMap()
+        else {
+            val counts = mutableMapOf<String, Int>()
+            readState.forEach { (channelId, state) ->
+                if (state.mentionCount > 0) {
+                    val gId = channelGuilds[channelId] ?: return@forEach
+                    counts[gId] = (counts[gId] ?: 0) + state.mentionCount
+                }
+            }
+            counts
+        }
+    }
+
+    val folderEntry = RuntimeServerListState.entries
+        .filterIsInstance<ServerListEntry.FolderEntry>()
+        .find { it.folderId == folderId }
+
+    LaunchedEffect(folderEntry) {
+        if (folderEntry == null || folderEntry.guilds.isEmpty()) {
+            onBack()
+        }
+    }
+
+    if (folderEntry == null) return
+
+    ScreenScaffold(scrollState = listState) {
+        ScalingLazyColumn(
+            state = listState,
+            modifier = Modifier.fillMaxSize(),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
+            item {
+                Text(
+                    text = folderEntry.name,
+                    style = MaterialTheme.typography.titleSmall,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(bottom = 2.dp)
+                )
+            }
+
+            items(folderEntry.guilds.size) { index ->
+                val guild = folderEntry.guilds[index]
+                FolderServerListButton(
+                    guild = guild,
+                    imageLoader = imageLoader,
+                    mentionCount = guildMentionCounts[guild.id] ?: 0,
+                    onClick = { onNavigateToChannels(guild.id, guild.name) }
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun FolderServerListButton(
+    guild: Guild,
+    imageLoader: ImageLoader,
+    mentionCount: Int = 0,
+    onClick: () -> Unit
+) {
+    val context = LocalContext.current
+    val bannerUrl = guild.bannerUrl()
+    val iconUrl = guild.iconUrl()
+
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(52.dp)
+            .clip(RoundedCornerShape(26.dp))
+            .clickable(onClick = onClick)
+    ) {
+        if (bannerUrl != null) {
+            AsyncImage(
+                model = ImageRequest.Builder(context).data(bannerUrl).crossfade(true).build(),
+                imageLoader = imageLoader,
+                contentDescription = null,
+                contentScale = ContentScale.Crop,
+                modifier = Modifier.matchParentSize()
+            )
+            Box(
+                modifier = Modifier
+                    .matchParentSize()
+                    .background(
+                        Brush.horizontalGradient(
+                            listOf(Color.Black.copy(0.55f), Color.Black.copy(0.30f))
+                        )
+                    )
+            )
+        } else {
+            Box(
+                modifier = Modifier
+                    .matchParentSize()
+                    .background(MaterialTheme.colorScheme.surfaceContainer)
+            )
+        }
+
+        Row(
+            modifier = Modifier
+                .matchParentSize()
+                .padding(horizontal = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            if (iconUrl != null) {
+                AsyncImage(
+                    model = ImageRequest.Builder(context).data(iconUrl).crossfade(true).build(),
+                    imageLoader = imageLoader,
+                    contentDescription = null,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier
+                        .size(32.dp)
+                        .clip(CircleShape)
+                )
+            } else {
+                Box(
+                    modifier = Modifier
+                        .size(32.dp)
+                        .background(Color(0xFF5865F2), CircleShape),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = guild.name.firstOrNull()?.uppercaseChar()?.toString() ?: "?",
+                        color = Color.White,
+                        fontSize = 14.sp,
+                        style = MaterialTheme.typography.labelSmall
+                    )
+                }
+            }
+
+            Text(
+                text = guild.name,
+                style = MaterialTheme.typography.bodySmall,
+                color = if (bannerUrl != null) Color.White else MaterialTheme.colorScheme.onSurface,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f)
+            )
+        }
+
+        if (mentionCount > 0) {
+            MentionBadge(
+                mentionCount = mentionCount,
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .padding(top = 4.dp, end = 6.dp)
+            )
+        }
     }
 }
