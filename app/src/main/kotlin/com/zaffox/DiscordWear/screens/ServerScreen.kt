@@ -103,7 +103,7 @@ fun ServerScreen(
             }
 
             item {
-                Spacer(modifier = Modifier.height(2.dp))
+                Spacer(modifier = Modifier.height(14.dp))
             }
 
             if (loading && guilds.isEmpty()) {
@@ -119,7 +119,7 @@ fun ServerScreen(
                     )
                 }
             } else {
-                // 3-wide circular grid of servers
+                // Hexagonal staggered 3-wide circular grid of servers
                 items(serverRows.size) { rowIndex ->
                     val row = serverRows[rowIndex]
                     Row(
@@ -129,13 +129,33 @@ fun ServerScreen(
                         horizontalArrangement = Arrangement.spacedBy(10.dp, Alignment.CenterHorizontally),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        row.forEach { guild ->
+                        if (row.size == 1) {
+                            val guild = row[0]
                             CircularServerButton(
                                 guild = guild,
                                 imageLoader = imageLoader,
                                 mentionCount = guildMentionCounts[guild.id] ?: 0,
                                 onClick = { onNavigateToChannels(guild.id, guild.name) }
                             )
+                        } else {
+                            for (colIndex in 0 until 3) {
+                                val guild = row.getOrNull(colIndex)
+                                val isSideColumn = colIndex == 0 || colIndex == 2
+                                val yOffset = if (isSideColumn) (-24).dp else 0.dp
+
+                                if (guild != null) {
+                                    Box(modifier = Modifier.offset(y = yOffset)) {
+                                        CircularServerButton(
+                                            guild = guild,
+                                            imageLoader = imageLoader,
+                                            mentionCount = guildMentionCounts[guild.id] ?: 0,
+                                            onClick = { onNavigateToChannels(guild.id, guild.name) }
+                                        )
+                                    }
+                                } else {
+                                    Spacer(modifier = Modifier.size(52.dp))
+                                }
+                            }
                         }
                     }
                 }
