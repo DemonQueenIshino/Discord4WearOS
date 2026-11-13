@@ -1425,13 +1425,14 @@ internal fun MessageBubble(
             horizontalArrangement = Arrangement.Start,
             verticalAlignment = Alignment.Top
         ) {
-            val avatarSize = 22.dp
-            val avatarSlotSize = avatarSize * 1.4f
+            val avatarSize = 24.dp
+            val avatarSlotSize = 22.dp * 1.4f
             if (!compactMode && !isContinuation) {
                 DiscordAvatarWithDecoration(
                     user = msg.author,
                     imageLoader = imageLoader,
                     size = avatarSize,
+                    decorSize = avatarSlotSize,
                     guildId = guildId,
                     guildMemberCache = guildMemberCache,
                     onClick = { onAvatarClick(msg.author.id) }
@@ -2289,6 +2290,7 @@ private fun DiscordAvatarWithDecoration(
     user: com.demonqueenishino.Discord4WOS.api.DiscordUser,
     imageLoader: ImageLoader,
     size: Dp,
+    decorSize: Dp = size * 1.4f,
     guildId: String? = null,
     guildMemberCache: Map<String, GuildMember?> = emptyMap(),
     onClick: () -> Unit = {}
@@ -2303,7 +2305,7 @@ private fun DiscordAvatarWithDecoration(
     Box(
         contentAlignment = Alignment.Center,
         modifier = Modifier
-            .size(size * 1.4f)
+            .size(decorSize)
             .pointerInput(onClick) {
                 detectTapGestures(
                     onTap = { onClick() }
@@ -2323,7 +2325,7 @@ private fun DiscordAvatarWithDecoration(
                 imageLoader = imageLoader,
                 contentDescription = null,
                 contentScale = ContentScale.Fit,
-                modifier = Modifier.size(size * 1.4f)
+                modifier = Modifier.size(decorSize)
             )
         }
     }
