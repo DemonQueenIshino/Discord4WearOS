@@ -205,7 +205,7 @@ fun ServerScreen(
             state = listState,
             modifier = Modifier.fillMaxSize(),
             horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy((-28).dp)
+            verticalArrangement = Arrangement.spacedBy((-24).dp)
         ) {
             if (loading && guilds.isEmpty()) {
                 item {
