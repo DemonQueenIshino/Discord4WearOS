@@ -1425,18 +1425,20 @@ internal fun MessageBubble(
             horizontalArrangement = Arrangement.Start,
             verticalAlignment = Alignment.Top
         ) {
+            val avatarSize = 22.dp
+            val avatarSlotSize = avatarSize * 1.4f
             if (!compactMode && !isContinuation) {
                 DiscordAvatarWithDecoration(
                     user = msg.author,
                     imageLoader = imageLoader,
-                    size = 22.dp,
+                    size = avatarSize,
                     guildId = guildId,
                     guildMemberCache = guildMemberCache,
                     onClick = { onAvatarClick(msg.author.id) }
                 )
                 Spacer(Modifier.width(4.dp))
             } else if (!compactMode) {
-                Spacer(Modifier.width(26.dp))
+                Spacer(Modifier.width(avatarSlotSize + 4.dp))
             }
 
             Column(
@@ -2301,6 +2303,7 @@ private fun DiscordAvatarWithDecoration(
     Box(
         contentAlignment = Alignment.Center,
         modifier = Modifier
+            .size(size * 1.4f)
             .pointerInput(onClick) {
                 detectTapGestures(
                     onTap = { onClick() }
