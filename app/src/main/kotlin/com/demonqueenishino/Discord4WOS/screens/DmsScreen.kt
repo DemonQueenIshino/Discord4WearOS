@@ -178,12 +178,12 @@ private fun DmButton(
                             contentDescription = null,
                             contentScale = ContentScale.Crop,
                             modifier = Modifier
-                                .size(38.dp)
+                                .size(40.dp)
                                 .clip(CircleShape),
                             error = {
                                 Box(
                                     modifier = Modifier
-                                        .size(38.dp)
+                                        .size(40.dp)
                                         .background(Color(0xFF1E1F22), CircleShape),
                                     contentAlignment = Alignment.Center
                                 ) {
@@ -199,7 +199,7 @@ private fun DmButton(
                     } else {
                         Box(
                             modifier = Modifier
-                                .size(38.dp)
+                                .size(40.dp)
                                 .background(Color(0xFF1E1F22), CircleShape),
                             contentAlignment = Alignment.Center
                         ) {
