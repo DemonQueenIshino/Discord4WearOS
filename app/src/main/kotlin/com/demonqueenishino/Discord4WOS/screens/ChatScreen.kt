@@ -1425,7 +1425,7 @@ internal fun MessageBubble(
             horizontalArrangement = Arrangement.Start,
             verticalAlignment = Alignment.Top
         ) {
-            val avatarSize = 24.dp
+            val avatarSize = 26.dp
             val avatarSlotSize = 22.dp * 1.4f
             if (!compactMode && !isContinuation) {
                 DiscordAvatarWithDecoration(
